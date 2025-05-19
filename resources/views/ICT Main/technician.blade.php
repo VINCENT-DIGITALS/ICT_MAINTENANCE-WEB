@@ -378,7 +378,7 @@
                                         <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.picked_count"></td>
                                         <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.completed_count"></td>
                                         <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.completion_rate"></td>
-                                        <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.resolution_time"></td>
+                                        <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.turnaround_time || '0 days 0 hrs 0 min 0 sec'"></td>
                                         <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.rating"></td>
                                     </tr>
                                 </template>
@@ -602,7 +602,8 @@
                             <div class="ml-3 sm:ml-4">
                                 <p class="text-green-600 lg:text-xs xl:text-lg sm:text-sm font-medium">Average
                                     Turnaround Time</p>
-                                <p class="lg:text-xl xl:text-3xl sm:text-2xl font-bold">2 days 45 min</p>
+                                <p class="lg:text-xl xl:text-3xl sm:text-2xl font-bold average-turnaround-time"
+                                    x-text="selectedTechnician.turnaround_time || '0 days 0 hrs 0 min 0 sec'"></p>
                             </div>
                         </div>
 
@@ -895,10 +896,11 @@
                     @foreach ($technicians as $technician)
                         {
                             name: "{{ $technician['name'] }}",
+                            philrice_id: "{{ $technician['philrice_id'] }}",
                             picked_count: {{ $technician['counts']['picked'] ?? 0 }},
                             completed_count: {{ $technician['counts']['completed'] ?? 0 }},
                             completion_rate: "{{ $technician['completion_rate'] ?? '0%' }}",
-                            resolution_time: "12 hrs 30 min",
+                            turnaround_time: "{{ $technician['turnaround_time'] ?? '0 days 0 hrs 0 min 0 sec' }}",
                             rating: "{{ $technician['rating']['display'] ?? 'Not rated' }}"
                         },
                     @endforeach
@@ -973,6 +975,14 @@
                         }
                         return 0;
                     });
+                },
+
+                // Function to update technician data
+                updateTechnicianData(philriceId, newData) {
+                    const techIndex = this.techniciansData.findIndex(tech => tech.philrice_id === philriceId);
+                    if (techIndex >= 0) {
+                        this.techniciansData[techIndex] = { ...this.techniciansData[techIndex], ...newData };
+                    }
                 }
             }));
 
@@ -1240,15 +1250,53 @@
 
                 // Watch for changes to selectedTechnician
                 init() {
+                    // Flag to prevent multiple loads of the same data
+                    this.loadedTurnaroundTimes = {};
+
                     // Keep existing init code
                     this.$watch('selectedTechnician', (technician) => {
-                        // Update the chart when technician changes
-                        if (technician) {
+                        // Only load turnaround time if this is a new technician
+                        // or we haven't loaded it for this technician yet
+                        if (technician && technician.philrice_id && !this.loadedTurnaroundTimes[technician.philrice_id]) {
+                            // Mark as loaded to prevent duplicate calls
+                            this.loadedTurnaroundTimes[technician.philrice_id] = true;
+                            this.loadTurnaroundTime(technician.philrice_id);
+                        }
+
+                        // Update the chart when technician changes (if this exists in your code)
+                        if (window.updateSummaryChart && technician) {
                             setTimeout(() => {
                                 window.updateSummaryChart(technician);
-                            }, 100); // Small delay to ensure the DOM is updated
+                            }, 100);
                         }
                     });
+                },
+
+                // Method to load turnaround time for the selected technician
+                loadTurnaroundTime(technicianId) {
+                    console.log("Loading turnaround time for technician:", technicianId);
+
+                    // Show loading state
+                    this.selectedTechnician.turnaround_time = "Loading...";
+
+                    // Fetch the turnaround time data
+                    fetch(`/ServiceTrackerGithub/technician/${technicianId}/turnaround-time`)
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log("Turnaround time data:", data);
+
+                            if (data.success) {
+                                this.selectedTechnician.turnaround_time = data.average_turnaround_time;
+                                console.log("Updated turnaround time:", this.selectedTechnician.turnaround_time);
+                            } else {
+                                this.selectedTechnician.turnaround_time = "No data available";
+                                console.warn("Failed to load turnaround time:", data.message);
+                            }
+                        })
+                        .catch(error => {
+                            console.error("Error loading turnaround time:", error);
+                            this.selectedTechnician.turnaround_time = "Error loading data";
+                        });
                 },
 
                 // Calculate percentages for the current technician
@@ -1374,5 +1422,55 @@
                 }
             });
         }
+
+        // Add this to your existing JavaScript that handles technician selection
+        function loadTechnicianTurnaroundTime(technicianId) {
+            // Show loading state
+            document.querySelector('.average-turnaround-time').textContent = "Loading...";
+
+            // Fetch the turnaround time data
+            fetch(`/ServiceTrackerGithub/technician/${technicianId}/turnaround-time`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Turnaround time data:", data); // Log the full data for debugging
+
+                    if (data.success) {
+                        // Update the selectedTechnician object with the turnaround time
+                        if (window.Alpine) {
+                            const component = Alpine.getComponent(document.querySelector('[x-data="technicianView"]'));
+                            if (component && component.selectedTechnician) {
+                                component.selectedTechnician.turnaround_time = data.average_turnaround_time;
+                            }
+                        }
+
+                        // Log detailed information about the calculation
+                        console.log('Total seconds:', data.total_seconds);
+                        console.log('Requests processed:', data.requests_processed);
+                        console.log('Average seconds per request:', data.average_seconds);
+                        console.log('Formatted time:', data.average_turnaround_time);
+
+                        if (data.debug_info) {
+                            console.log('Debug info:', data.debug_info);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading turnaround time:', error);
+                    // Set a fallback value on error
+                    if (window.Alpine) {
+                        const component = Alpine.getComponent(document.querySelector('[x-data="technicianView"]'));
+                        if (component && component.selectedTechnician) {
+                            component.selectedTechnician.turnaround_time = "Error loading data";
+                        }
+                    }
+                });
+        }
+
+        // Call this function whenever a technician is selected
+        document.addEventListener('technicianSelected', function(e) {
+            if (e.detail && e.detail.id) {
+                loadTechnicianTurnaroundTime(e.detail.id);
+            }
+        });
     </script>
 </x-layout>

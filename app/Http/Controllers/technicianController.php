@@ -72,6 +72,10 @@ class technicianController extends Controller
                 // Get technician's requests by category for summary data
                 $requestData = $this->getTechnicianRequestsByCategory($user->philrice_id);
 
+                // Get turnaround time using the consistent helper method
+                $turnaroundTimeData = $this->calculateTurnaroundTime($user->philrice_id);
+                $turnaroundTime = $turnaroundTimeData['average_turnaround_time'];
+
                 return [
                     'name' => $user->name,
                     'philrice_id' => $user->philrice_id ?? 'N/A',
@@ -101,7 +105,8 @@ class technicianController extends Controller
                     'most_serviced_category' => $mostServicedCategory['name'] ?? 'N/A',
                     'most_serviced_count' => $mostServicedCategory['count'] ?? 0,
                     'most_serviced_office' => $mostServicedOffice['name'] ?? 'N/A',
-                    'most_serviced_office_count' => $mostServicedOffice['count'] ?? 0
+                    'most_serviced_office_count' => $mostServicedOffice['count'] ?? 0,
+                    'turnaround_time' => $turnaroundTime
                 ];
             });
 
@@ -349,6 +354,10 @@ class technicianController extends Controller
         $mostServicedCategory = $this->getMostServicedCategory($technician->philrice_id);
         $mostServicedOffice = $this->getMostServicedOffice($technician->philrice_id);
 
+        // Get turnaround time using the consistent helper method
+        $turnaroundTimeData = $this->calculateTurnaroundTime($technician->philrice_id);
+        $turnaroundTime = $turnaroundTimeData['average_turnaround_time'];
+
         $technicianData = [
             'name' => $technician->name,
             'philrice_id' => $technician->philrice_id ?? 'N/A',
@@ -378,7 +387,8 @@ class technicianController extends Controller
             'most_serviced_category' => $mostServicedCategory['name'] ?? 'N/A',
             'most_serviced_count' => $mostServicedCategory['count'] ?? 0,
             'most_serviced_office' => $mostServicedOffice['name'] ?? 'N/A',
-            'most_serviced_office_count' => $mostServicedOffice['count'] ?? 0
+            'most_serviced_office_count' => $mostServicedOffice['count'] ?? 0,
+            'turnaround_time' => $turnaroundTime
         ];
 
         return view('ICT Main.technician_detail', compact('technicianData'));
@@ -482,6 +492,207 @@ class technicianController extends Controller
                 'success' => false,
                 'message' => 'An error occurred while archiving the account'
             ], 500);
+        }
+    }
+
+    /**
+     * Calculate the average turnaround time for a specific technician
+     *
+     * @param int $technicianId The technician's ID
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTurnaroundTime($technicianId)
+    {
+        try {
+            // Use the known working SQL query with Common Table Expressions (CTEs)
+            $results = DB::select("
+                WITH
+                request_periods AS (
+                    SELECT
+                        request_id,
+                        changed_by,
+                        status,
+                        created_at,
+                        LEAD(created_at) OVER (PARTITION BY request_id, changed_by ORDER BY created_at) AS next_timestamp,
+                        LEAD(status) OVER (PARTITION BY request_id, changed_by ORDER BY created_at) AS next_status
+                    FROM request_status_history
+                    WHERE changed_by = ?
+                ),
+                active_periods AS (
+                    SELECT
+                        request_id,
+                        changed_by,
+                        created_at AS period_start,
+                        next_timestamp AS period_end,
+                        TIMESTAMPDIFF(SECOND, created_at, next_timestamp) AS period_seconds
+                    FROM request_periods
+                    WHERE
+                        status = 'ongoing'
+                        AND next_status IN ('paused', 'completed')
+                )
+                SELECT
+                    request_id,
+                    SUM(period_seconds) AS total_active_seconds,
+                    CONCAT(
+                        FLOOR(SUM(period_seconds) / 86400), ' days ',
+                        FLOOR((SUM(period_seconds) % 86400) / 3600), ' hrs ',
+                        FLOOR((SUM(period_seconds) % 3600) / 60), ' min ',
+                        SUM(period_seconds) % 60, ' sec'
+                    ) AS formatted_duration
+                FROM
+                    active_periods
+                GROUP BY
+                    request_id
+                ORDER BY
+                    total_active_seconds DESC
+            ", [$technicianId]);
+
+            // If no results, return default response
+            if (empty($results)) {
+                return response()->json([
+                    'success' => true,
+                    'average_turnaround_time' => '0 days 0 hrs 0 min 0 sec',
+                    'average_seconds' => 0,
+                    'requests_processed' => 0,
+                    'debug_info' => 'No active time periods found for this technician'
+                ]);
+            }
+
+            // Calculate total active time and number of requests
+            $totalActiveSeconds = 0;
+            $requestsProcessed = count($results);
+
+            foreach ($results as $result) {
+                $totalActiveSeconds += $result->total_active_seconds;
+            }
+
+            // Calculate average time
+            $averageTimeSeconds = $totalActiveSeconds / $requestsProcessed;
+
+            // Format the average time
+            $days = floor($averageTimeSeconds / 86400);
+            $hours = floor(($averageTimeSeconds % 86400) / 3600);
+            $minutes = floor(($averageTimeSeconds % 3600) / 60);
+            $seconds = floor($averageTimeSeconds % 60);
+
+            $formattedTime = '';
+            if ($days > 0) $formattedTime .= "$days days ";
+            if ($hours > 0 || $days > 0) $formattedTime .= "$hours hrs ";
+            if ($minutes > 0 || $hours > 0 || $days > 0) $formattedTime .= "$minutes min ";
+            $formattedTime .= "$seconds sec"; // Always include seconds for debugging
+
+            return response()->json([
+                'success' => true,
+                'average_turnaround_time' => $formattedTime,
+                'average_seconds' => $averageTimeSeconds,
+                'requests_processed' => $requestsProcessed,
+                'total_seconds' => $totalActiveSeconds,
+                'debug_info' => $results // Include individual request data for debugging
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error calculating turnaround time: ' . $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
+
+    // Helper method to calculate turnaround time with consistent formatting
+    private function calculateTurnaroundTime($technicianId)
+    {
+        try {
+            // Use the known working SQL query with Common Table Expressions (CTEs)
+            $results = DB::select("
+                WITH
+                request_periods AS (
+                    SELECT
+                        request_id,
+                        changed_by,
+                        status,
+                        created_at,
+                        LEAD(created_at) OVER (PARTITION BY request_id, changed_by ORDER BY created_at) AS next_timestamp,
+                        LEAD(status) OVER (PARTITION BY request_id, changed_by ORDER BY created_at) AS next_status
+                    FROM request_status_history
+                    WHERE changed_by = ?
+                ),
+                active_periods AS (
+                    SELECT
+                        request_id,
+                        changed_by,
+                        created_at AS period_start,
+                        next_timestamp AS period_end,
+                        TIMESTAMPDIFF(SECOND, created_at, next_timestamp) AS period_seconds
+                    FROM request_periods
+                    WHERE
+                        status = 'ongoing'
+                        AND next_status IN ('paused', 'completed')
+                )
+                SELECT
+                    request_id,
+                    SUM(period_seconds) AS total_active_seconds,
+                    CONCAT(
+                        FLOOR(SUM(period_seconds) / 86400), ' days ',
+                        FLOOR((SUM(period_seconds) % 86400) / 3600), ' hrs ',
+                        FLOOR((SUM(period_seconds) % 3600) / 60), ' min ',
+                        SUM(period_seconds) % 60, ' sec'
+                    ) AS formatted_duration
+                FROM
+                    active_periods
+                GROUP BY
+                    request_id
+                ORDER BY
+                    total_active_seconds DESC
+            ", [$technicianId]);
+
+            // If no results, return default response
+            if (empty($results)) {
+                return [
+                    'average_turnaround_time' => '0 days 0 hrs 0 min 0 sec',
+                    'average_seconds' => 0,
+                    'requests_processed' => 0,
+                    'total_seconds' => 0,
+                ];
+            }
+
+            // Calculate total active time and number of requests
+            $totalActiveSeconds = 0;
+            $requestsProcessed = count($results);
+
+            foreach ($results as $result) {
+                $totalActiveSeconds += $result->total_active_seconds;
+            }
+
+            // Calculate average time
+            $averageTimeSeconds = $totalActiveSeconds / $requestsProcessed;
+
+            // Format the average time
+            $days = floor($averageTimeSeconds / 86400);
+            $hours = floor(($averageTimeSeconds % 86400) / 3600);
+            $minutes = floor(($averageTimeSeconds % 3600) / 60);
+            $seconds = floor($averageTimeSeconds % 60);
+
+            $formattedTime = '';
+            if ($days > 0) $formattedTime .= "$days days ";
+            if ($hours > 0 || $days > 0) $formattedTime .= "$hours hrs ";
+            if ($minutes > 0 || $hours > 0 || $days > 0) $formattedTime .= "$minutes min ";
+            $formattedTime .= "$seconds sec"; // Always include seconds for debugging
+
+            return [
+                'average_turnaround_time' => $formattedTime,
+                'average_seconds' => $averageTimeSeconds,
+                'requests_processed' => $requestsProcessed,
+                'total_seconds' => $totalActiveSeconds,
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'average_turnaround_time' => '0 days 0 hrs 0 min 0 sec',
+                'average_seconds' => 0,
+                'requests_processed' => 0,
+                'total_seconds' => 0,
+            ];
         }
     }
 }
