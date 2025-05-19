@@ -117,7 +117,22 @@ class technicianController extends Controller
             logger('Users found:', $technicians->toArray());
         }
 
-        return view('ICT Main.technician', compact('technicians'));
+        // Get all users for the dropdown, including their role_id
+        $allUsers = \App\Models\User::where('archived', false)
+            ->orderBy('philrice_id')
+            ->get(['philrice_id', 'name', 'email', 'role_id']);
+
+        // Get list of working technicians' IDs
+        $workingTechnicianIds = \DB::table('lib_technicians')
+            ->pluck('user_idno')
+            ->toArray();
+
+        // Get available roles for technician creation
+        $roles = \DB::table('lib_roles')
+            ->whereIn('role_name', ['Super Administrator', 'Administrator', 'Technician', 'Station Technician'])
+            ->get(['id', 'role_name']);
+
+        return view('ICT Main.technician', compact('technicians', 'allUsers', 'workingTechnicianIds', 'roles'));
     }
 
     /**
@@ -693,6 +708,97 @@ class technicianController extends Controller
                 'requests_processed' => 0,
                 'total_seconds' => 0,
             ];
+        }
+    }
+
+    /**
+     * Store a newly created technician account
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function store(Request $request)
+    {
+        try {
+            // Validate the request data
+            $validator = \Validator::make($request->all(), [
+                'philrice_id' => 'required|exists:users,philrice_id',
+                'role_id' => 'required|exists:lib_roles,id',
+                'password' => 'nullable|min:6',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $validator->errors()->first()
+                ], 422);
+            }
+
+            // Find the user by philrice_id
+            $user = \App\Models\User::where('philrice_id', $request->philrice_id)->first();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            // Check if user is already a technician
+            $existingTechnician = \DB::table('lib_technicians')->where('user_idno', $request->philrice_id)->first();
+
+            if ($existingTechnician) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This user is already registered as a technician'
+                ], 400);
+            }
+
+            // Begin transaction to ensure both operations succeed or fail together
+            \DB::beginTransaction();
+
+            try {
+                // 1. Update user's role if needed
+                if ($user->role_id != $request->role_id) {
+                    $user->role_id = $request->role_id;
+                }
+
+                // 2. Update password if provided
+                if ($request->filled('password')) {
+                    $user->password = \Hash::make($request->password);
+                }
+
+                // Save user changes
+                $user->save();
+
+                // 3. Add user to lib_technicians
+                \DB::table('lib_technicians')->insert([
+                    'user_idno' => $user->philrice_id,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+
+                // Commit transaction
+                \DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Technician account successfully created'
+                ]);
+            } catch (\Exception $e) {
+                // Rollback transaction on error
+                \DB::rollBack();
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to create technician account: ' . $e->getMessage()
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'An unexpected error occurred: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

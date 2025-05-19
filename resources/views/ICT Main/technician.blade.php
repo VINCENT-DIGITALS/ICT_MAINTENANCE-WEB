@@ -92,7 +92,115 @@
                     <!-- Add New Account Section -->
                     <div x-show="showAddAccount" x-transition:enter="transition ease-out duration-300"
                         x-transition:enter-start="opacity-0 transform translate-y-4"
-                        x-transition:enter-end="opacity-100 transform translate-y-0" class="mt-2 p-1">
+                        x-transition:enter-end="opacity-100 transform translate-y-0" class="mt-2 p-1"
+                        x-data="{
+                            selectedUserId: null,
+                            userData: null,
+                            isWorkingTechnician: false,
+                            showEmployeeInfo: false,
+                            workingTechnicianIds: [],
+                            password: '',
+                            confirmPassword: '',
+                            passwordError: '',
+                            
+                            validateUser() {
+                                if (!this.selectedUserId) return;
+
+                                // Find user data from all users
+                                const user = this.allUsers.find(u => u.philrice_id === this.selectedUserId);
+                                if (user) {
+                                    this.userData = user;
+                                    // Check if user is already a working technician
+                                    this.isWorkingTechnician = this.workingTechnicianIds.includes(this.selectedUserId);
+                                    // Show employee info section
+                                    this.showEmployeeInfo = true;
+                                } else {
+                                    this.userData = null;
+                                    this.showEmployeeInfo = false;
+                                }
+                            },
+                            
+                            togglePasswordVisibility(fieldId) {
+                                const field = document.getElementById(fieldId);
+                                field.type = field.type === 'password' ? 'text' : 'password';
+                            },
+                            
+                            submitNewAccount() {
+                                if (this.isWorkingTechnician) return;
+                                
+                                // Validate passwords match if entered
+                                if (this.password || document.getElementById('confirm-password').value) {
+                                    if (this.password !== document.getElementById('confirm-password').value) {
+                                        this.passwordError = 'Passwords do not match';
+                                        return;
+                                    }
+                                    if (this.password.length < 6) {
+                                        this.passwordError = 'Password must be at least 6 characters';
+                                        return;
+                                    }
+                                }
+                                
+                                // Clear previous errors
+                                this.passwordError = '';
+                                
+                                // Create form data
+                                const formData = {
+                                    philrice_id: this.userData.philrice_id,
+                                    role_id: document.getElementById('employee-role').value,
+                                    password: this.password,
+                                    _token: '{{ csrf_token() }}'
+                                };
+                                
+                                // Submit using fetch API
+                                fetch('{{ route('technician.store') }}', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                    },
+                                    body: JSON.stringify(formData)
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        // Show success alert
+                                        Swal.fire({
+                                            title: 'Success!',
+                                            text: data.message,
+                                            icon: 'success',
+                                            confirmButtonColor: '#007A33'
+                                        }).then(() => {
+                                            // Reload page to show updated technicians list
+                                            window.location.reload();
+                                        });
+                                    } else {
+                                        // Show error message
+                                        Swal.fire({
+                                            title: 'Error',
+                                            text: data.message || 'Failed to add account',
+                                            icon: 'error',
+                                            confirmButtonColor: '#007A33'
+                                        });
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error:', error);
+                                    Swal.fire({
+                                        title: 'Error',
+                                        text: 'An unexpected error occurred',
+                                        icon: 'error',
+                                        confirmButtonColor: '#007A33'
+                                    });
+                                });
+                            },
+
+                            allUsers: []
+                        }"
+                        x-init="
+                            workingTechnicianIds = {{ json_encode($workingTechnicianIds) }};
+                            allUsers = {{ json_encode($allUsers) }};
+                        ">
+
                         <!-- Header -->
                         <div class="flex items-center space-x-2 border-b pb-2">
                             <button @click="showAddAccount = false" class="text-green-600">
@@ -107,14 +215,15 @@
                         <!-- Employee ID Section -->
                         <div class="mt-4">
                             <label for="employee-id" class="block text-sm font-medium text-gray-700">Employee ID</label>
-                            <div
-                                class="mt-1 flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
-                                <select id="employee-id" name="employee-id"
-                                    class="block w-full sm:w-[50%] pl-3 pr-8 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 xs:text-xs">
-                                    <option>19-0404</option>
-                                    <!-- Add more options as needed -->
+                            <div class="mt-1 flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                                <select id="employee-id" name="employee-id" x-model="selectedUserId"
+                                    class="block w-full sm:w-[50%] pl-3 pr-8 py-1 lg:text-xs xl:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 xs:text-xs">
+                                    <option value="">Select an Employee</option>
+                                    <template x-for="user in allUsers" :key="user.philrice_id">
+                                        <option :value="user.philrice_id" x-text="user.philrice_id"></option>
+                                    </template>
                                 </select>
-                                <button @click="showEmployeeInfo = true"
+                                <button @click="validateUser()"
                                     class="bg-[#007A33] w-full sm:w-[50%] h-[30px] text-white px-5 py-1 text-xs font-semibold rounded-md hover:bg-green-700">
                                     VALIDATE
                                 </button>
@@ -125,7 +234,8 @@
                         <div x-show="showEmployeeInfo" x-transition:enter="transition ease-out duration-300"
                             x-transition:enter-start="opacity-0 transform translate-y-4"
                             x-transition:enter-end="opacity-100 transform translate-y-0"
-                            class="flex flex-col mt-3 space-y-8 sm:space-y-16">
+                            class="flex flex-col mt-3 space-y-8 sm:space-y-16 justify-between xl:h-[630px]">
+
                             <!-- Employee Information Title -->
                             <div>
                                 <h3 class="font-bold text-lg">Employee Information</h3>
@@ -135,8 +245,7 @@
                                     <!-- Profile and Name in One Line -->
                                     <div class="flex items-center space-x-4">
                                         <!-- Profile Picture -->
-                                        <div
-                                            class="w-14 h-14 sm:w-16 sm:h-16 bg-gray-300 rounded-full flex items-center justify-center">
+                                        <div class="w-14 h-14 sm:w-16 sm:h-16 bg-gray-300 rounded-full flex items-center justify-center">
                                             <svg class="w-7 h-7 sm:w-8 sm:h-8 text-gray-500"
                                                 xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                                 stroke-width="2" stroke="currentColor">
@@ -147,40 +256,53 @@
                                             </svg>
                                         </div>
                                         <!-- Employee Name -->
-                                        <p class="font-bold text-lg sm:text-xl">Ranniel F. Lauriaga</p>
+                                        <p class="font-bold xl:text-2xl sm:text-xl" x-text="userData?.name || 'No Name Found'"></p>
                                     </div>
 
                                     <!-- Employee Details Below -->
-                                    <div class="mt-2 text-[10px] text-gray-600">
-                                        <p><span class="text-gray-400">ID No.:</span> 17-0110</p>
-                                        <p><span class="text-gray-400">Email:</span> rf.lauriaga@mail.philrice.gov.ph
+                                    <div class="mt-2 lg:text-[10px] xl:text-sm text-gray-600">
+                                        <p><span class="text-gray-400">ID No.:</span> <span x-text="userData?.philrice_id || 'N/A'"></span></p>
+                                        <p><span class="text-gray-400">Email:</span> <span x-text="userData?.email || 'N/A'"></span></p>
+                                        <p><span class="text-gray-400">Position:</span> No Info</p>
+                                        <p><span class="text-gray-400">Division:</span> No Info</p>
+                                    </div>
+
+                                    <!-- Working Technician Status Message -->
+                                    <div class="mt-4" x-show="isWorkingTechnician">
+                                        <p class="text-yellow-600 text-sm font-semibold">
+                                            Note: This employee is already registered as a technician.
                                         </p>
-                                        <p><span class="text-gray-400">Position:</span> Information Systems Analyst II
-                                        </p>
-                                        <p><span class="text-gray-400">Division:</span> Information Systems Division,
-                                            CES</p>
                                     </div>
                                 </div>
 
                                 <!-- Role Selection -->
                                 <div class="mt-4">
                                     <label for="employee-role"
-                                        class="block text-xs font-medium text-gray-700">Role</label>
+                                        class="block lg:text-xs xl:text-sm font-medium text-gray-700"
+                                        :class="{ 'opacity-50': isWorkingTechnician }">Role</label>
                                     <select id="employee-role" name="employee-role"
-                                        class="block w-full mt-1 pl-3 pr-10 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 text-gray-700">
-                                        <option>Technician</option>
-                                        <option>Administrator</option>
+                                        class="block w-full mt-1 pl-3 pr-10 py-1 lg:text-xs xl:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 text-gray-700"
+                                        :disabled="isWorkingTechnician"
+                                        x-init="$watch('userData', value => {
+                                            if (value && value.role_id) {
+                                                $el.value = value.role_id;
+                                            }
+                                        })">
+                                        @foreach ($roles as $role)
+                                            <option value="{{ $role->id }}">{{ $role->role_name }}</option>
+                                        @endforeach
                                     </select>
                                 </div>
 
                                 <!-- Password Fields -->
-                                <div class="mt-4">
+                                <div class="mt-4" :class="{ 'opacity-50': isWorkingTechnician }">
                                     <label for="password"
-                                        class="block text-xs font-medium text-gray-700">Password</label>
+                                        class="block lg:text-xs xl:text-sm font-medium text-gray-700">Password</label>
                                     <div class="relative">
-                                        <input type="password" id="password" name="password"
-                                            class="block w-full pl-3 pr-10 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500">
-                                        <button type="button" class="absolute inset-y-0 right-3 flex items-center">
+                                        <input type="password" id="password" name="password" x-model="password"
+                                            class="block w-full pl-3 pr-10 py-1 lg:text-xs xl:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                                            :disabled="isWorkingTechnician">
+                                        <button type="button" @click="togglePasswordVisibility('password')" class="absolute inset-y-0 right-3 flex items-center" :disabled="isWorkingTechnician">
                                             <svg class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg"
                                                 fill="none" viewBox="0 0 24 24" stroke-width="2"
                                                 stroke="currentColor">
@@ -193,13 +315,14 @@
                                     </div>
                                 </div>
 
-                                <div class="mt-4">
+                                <div class="mt-4" :class="{ 'opacity-50': isWorkingTechnician }">
                                     <label for="confirm-password"
-                                        class="block text-xs font-medium text-gray-700">Confirm Password</label>
+                                        class="block lg:text-xs xl:text-sm font-medium text-gray-700">Confirm Password</label>
                                     <div class="relative">
                                         <input type="password" id="confirm-password" name="confirm-password"
-                                            class="block w-full pl-3 pr-10 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500">
-                                        <button type="button" class="absolute inset-y-0 right-3 flex items-center">
+                                            class="block w-full pl-3 pr-10 py-1 lg:text-xs xl:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+                                            :disabled="isWorkingTechnician">
+                                        <button type="button" @click="togglePasswordVisibility('confirm-password')" class="absolute inset-y-0 right-3 flex items-center" :disabled="isWorkingTechnician">
                                             <svg class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg"
                                                 fill="none" viewBox="0 0 24 24" stroke-width="2"
                                                 stroke="currentColor">
@@ -210,13 +333,18 @@
                                             </svg>
                                         </button>
                                     </div>
+                                    <!-- Password error message -->
+                                    <p x-show="passwordError" x-text="passwordError" class="text-red-500 text-xs mt-1"></p>
                                 </div>
                             </div>
 
                             <!-- Submit Button -->
                             <div class="mt-1">
                                 <button
-                                    class="w-full bg-[#007A33] text-white py-2 text-xs text-center font-semibold rounded-lg shadow-md hover:bg-green-700">
+                                    @click="submitNewAccount"
+                                    :disabled="isWorkingTechnician || !userData"
+                                    class="w-full bg-[#007A33] text-white py-2 text-xs text-center font-semibold rounded-lg shadow-md hover:bg-green-700"
+                                    :class="{ 'opacity-50 cursor-not-allowed': isWorkingTechnician || !userData }">
                                     ADD NEW ACCOUNT
                                 </button>
                             </div>

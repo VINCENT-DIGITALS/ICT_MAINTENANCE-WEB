@@ -36,7 +36,13 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
     ];
 
-    protected $fillable = ['name', 'email', 'password', 'philrice_id'];
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'philrice_id',
+        'role_id'
+    ];
 
 
     // Use PhilRice ID for authentication
