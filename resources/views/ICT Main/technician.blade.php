@@ -102,7 +102,7 @@
                             password: '',
                             confirmPassword: '',
                             passwordError: '',
-                            
+
                             validateUser() {
                                 if (!this.selectedUserId) return;
 
@@ -119,15 +119,15 @@
                                     this.showEmployeeInfo = false;
                                 }
                             },
-                            
+
                             togglePasswordVisibility(fieldId) {
                                 const field = document.getElementById(fieldId);
                                 field.type = field.type === 'password' ? 'text' : 'password';
                             },
-                            
+
                             submitNewAccount() {
                                 if (this.isWorkingTechnician) return;
-                                
+
                                 // Validate passwords match if entered
                                 if (this.password || document.getElementById('confirm-password').value) {
                                     if (this.password !== document.getElementById('confirm-password').value) {
@@ -139,10 +139,10 @@
                                         return;
                                     }
                                 }
-                                
+
                                 // Clear previous errors
                                 this.passwordError = '';
-                                
+
                                 // Create form data
                                 const formData = {
                                     philrice_id: this.userData.philrice_id,
@@ -150,7 +150,7 @@
                                     password: this.password,
                                     _token: '{{ csrf_token() }}'
                                 };
-                                
+
                                 // Submit using fetch API
                                 fetch('{{ route('technician.store') }}', {
                                     method: 'POST',
@@ -506,7 +506,7 @@
                                         <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.picked_count"></td>
                                         <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.completed_count"></td>
                                         <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.completion_rate"></td>
-                                        <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.turnaround_time || '0 days 0 hrs 0 min 0 sec'"></td>
+                                        <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.turnaround_time || '0 days 0 hrs 0 min'"></td>
                                         <td class="xl:py-4 lg:py-3 sm:py-2" x-text="technician.rating"></td>
                                     </tr>
                                 </template>
@@ -1028,7 +1028,7 @@
                             picked_count: {{ $technician['counts']['picked'] ?? 0 }},
                             completed_count: {{ $technician['counts']['other_completed'] ?? 0 }},
                             completion_rate: "{{ $technician['completion_rate'] ?? '0%' }}",
-                            turnaround_time: "{{ $technician['turnaround_time'] ?? '0 days 0 hrs 0 min 0 sec' }}",
+                            turnaround_time: "{{ $technician['turnaround_time'] ?? '0 days 0 hrs 0 min' }}",
                             rating: "{{ $technician['rating']['display'] ?? 'Not rated' }}"
                         },
                     @endforeach

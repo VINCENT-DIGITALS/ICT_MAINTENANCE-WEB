@@ -566,7 +566,7 @@ class technicianController extends Controller
             if (empty($results)) {
                 return response()->json([
                     'success' => true,
-                    'average_turnaround_time' => '0 days 0 hrs 0 min 0 sec',
+                    'average_turnaround_time' => '0 days 0 hrs 0 min',
                     'average_seconds' => 0,
                     'requests_processed' => 0,
                     'debug_info' => 'No active time periods found for this technician'
@@ -664,7 +664,7 @@ class technicianController extends Controller
             // If no results, return default response
             if (empty($results)) {
                 return [
-                    'average_turnaround_time' => '0 days 0 hrs 0 min 0 sec',
+                    'average_turnaround_time' => '0 days 0 hrs 0 min',
                     'average_seconds' => 0,
                     'requests_processed' => 0,
                     'total_seconds' => 0,
@@ -703,7 +703,7 @@ class technicianController extends Controller
 
         } catch (\Exception $e) {
             return [
-                'average_turnaround_time' => '0 days 0 hrs 0 min 0 sec',
+                'average_turnaround_time' => '0 days 0 hrs 0 min',
                 'average_seconds' => 0,
                 'requests_processed' => 0,
                 'total_seconds' => 0,
