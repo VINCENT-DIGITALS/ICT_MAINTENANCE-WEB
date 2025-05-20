@@ -138,7 +138,18 @@ class IncidentReportApiController extends Controller
 
     public function update(Request $request, $id)
     {
+        // Validate the ID parameter
+        if (!is_numeric($id) || (int)$id <= 0) {
+            return response()->json([
+                'status' => false,
+                'data' => [
+                    'message' => 'Invalid incident ID'
+                ]
+            ], 400);
+        }
+
         $request->validate([
+            'id' => 'required|integer|exists:lib_incident_reports,id', // Add validation for ID
             'priority_level' => 'required|string',
             'incident_name' => 'required|string',
             'incident_nature' => 'required|string',
@@ -147,59 +158,61 @@ class IncidentReportApiController extends Controller
             'location' => 'required|string',
         ]);
 
-        try {
-            $incident = DB::table('lib_incident_reports')->where('id', $id)->first();
+        return DB::transaction(function () use ($request, $id) {
+            try {
+                $incident = DB::table('lib_incident_reports')->where('id', $id)->first();
 
-            if (!$incident) {
+                if (!$incident) {
+                    return response()->json([
+                        'status' => false,
+                        'data' => [
+                            'message' => 'Incident report not found'
+                        ]
+                    ], 404);
+                }
+
+                $verifierId = !empty($request->verifier_id) ? (int)$request->verifier_id : null;
+                $verifierName = $verifierId ? optional(DB::table('users')->where('id', $verifierId)->first())->firstname . ' ' . optional(DB::table('users')->where('id', $verifierId)->first())->lastname : null;
+
+                $approverId = !empty($request->approver_id) ? (int)$request->approver_id : null;
+                $approverName = $approverId ? optional(DB::table('users')->where('id', $approverId)->first())->firstname . ' ' . optional(DB::table('users')->where('id', $approverId)->first())->lastname : null;
+
+                $incidentDateTime = date('Y-m-d H:i:s', strtotime($request->incident_date . ' ' . $request->incident_time));
+
+                DB::table('lib_incident_reports')->where('id', $id)->update([
+                    'incident_name' => (string)$request->incident_name,
+                    'incident_nature' => (string)$request->incident_nature,
+                    'incident_date' => $incidentDateTime,
+                    'subject' => $request->subject,
+                    'description' => $request->description,
+                    'verifier_id' => $verifierId,
+                    'verifier_name' => $verifierName,
+                    'approver_id' => $approverId,
+                    'approver_name' => $approverName,
+                    'priority_level' => (string)$request->priority_level,
+                    'location' => (string)$request->location,
+                    'impact' => $request->impact,
+                    'affected_areas' => $request->affected_areas,
+                    'updated_at' => now(),
+                ]);
+
+                return response()->json([
+                    'status' => true,
+                    'data' => [
+                        'message' => 'Incident report updated successfully!',
+                        'incident_id' => $id
+                    ]
+                ]);
+            } catch (\Exception $e) {
+                // \Log::error('Error updating incident report: ' . $e->getMessage());
                 return response()->json([
                     'status' => false,
                     'data' => [
-                        'message' => 'Incident report not found'
+                        'message' => 'Error updating incident report: ' . $e->getMessage()
                     ]
-                ], 404);
+                ], 500);
             }
-
-            $verifierId = !empty($request->verifier_id) ? (int)$request->verifier_id : null;
-            $verifierName = $verifierId ? optional(DB::table('users')->where('id', $verifierId)->first())->firstname . ' ' . optional(DB::table('users')->where('id', $verifierId)->first())->lastname : null;
-
-            $approverId = !empty($request->approver_id) ? (int)$request->approver_id : null;
-            $approverName = $approverId ? optional(DB::table('users')->where('id', $approverId)->first())->firstname . ' ' . optional(DB::table('users')->where('id', $approverId)->first())->lastname : null;
-
-            $incidentDateTime = date('Y-m-d H:i:s', strtotime($request->incident_date . ' ' . $request->incident_time));
-
-            DB::table('lib_incident_reports')->where('id', $id)->update([
-                'incident_name' => (string)$request->incident_name,
-                'incident_nature' => (string)$request->incident_nature,
-                'incident_date' => $incidentDateTime,
-                'subject' => $request->subject,
-                'description' => $request->description,
-                'verifier_id' => $verifierId,
-                'verifier_name' => $verifierName,
-                'approver_id' => $approverId,
-                'approver_name' => $approverName,
-                'priority_level' => (string)$request->priority_level,
-                'location' => (string)$request->location,
-                'impact' => $request->impact,
-                'affected_areas' => $request->affected_areas,
-                'updated_at' => now(),
-            ]);
-
-            return response()->json([
-                'status' => true,
-                'data' => [
-                    'message' => 'Incident report updated successfully!',
-                    'incident_id' => $id
-                ]
-            ]);
-        } catch (\Exception $e) {
-            // \Log::error('Error updating incident report: ' . $e->getMessage());
-            return response()->json([
-                'status' => false,
-                'data' => [
-                    'message' => 'Error updating incident report: ' . $e->getMessage()
-                ]
-            ], 500);
-        }
+        });
     }
 
 

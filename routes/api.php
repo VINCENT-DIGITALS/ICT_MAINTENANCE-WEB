@@ -72,7 +72,7 @@ Route::get('/incident-reports', [IncidentReportApiController::class, 'customerFe
 Route::post('/incident-reports/resolve', [IncidentReportApiController::class, 'resolve']);
 //For store
 Route::post('/incident-reports/store', [IncidentReportApiController::class, 'store']);
-
+Route::post('/incident-reports/update', [IncidentReportApiController::class, 'update']);
 // Service Category API Routes
 // Route::get('/categories', [App\Http\Controllers\Api\DashboardApiController::class, 'getServiceCategories']);
 // Route::get('/categories/{categoryId}/subcategories', [App\Http\Controllers\Api\DashboardApiController::class, 'getSubcategories']);
