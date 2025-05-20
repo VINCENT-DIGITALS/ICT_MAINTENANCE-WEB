@@ -192,6 +192,13 @@ Route::get('/requests', function () {
 // Add this if it doesn't exist
 Route::get('/requests', [ServiceRequestController::class, 'getFirstTicketForTechnicians'])->name('requests');
 
+Route::middleware(['auth'])->group(function () {
+    // ...existing code...
+    Route::get('/ongoing/history/{id}', [OngoingRequestController::class, 'fetchRequestWithHistoryAndWorkingTime'])->name('ongoing.history');
+    Route::get('/completed/history/{id}', [CompletedRequestController::class, 'fetchRequestWithHistoryAndWorkingTime'])->name('completed.history');
+    // ...existing code...
+});
+
 // Analytics routes
 Route::get('/analytics/requests-by-office', [App\Http\Controllers\AnalyticsController::class, 'getRequestsByOffice']);
 Route::get('/analytics/turnaround-times-by-category', [App\Http\Controllers\AnalyticsController::class, 'getTurnaroundTimesByCategory']);

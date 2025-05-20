@@ -53,19 +53,20 @@
         statusHistory: [],
         workingTime: '',
         loadingHistory: false,
-
+    
         decodeHtml(html) {
             const textarea = document.createElement('textarea');
             textarea.innerHTML = html;
             return textarea.value;
         },
-        
+    
         truncateText(text, length = 50) {
             if (!text) return 'None';
             text = this.decodeHtml(text);
             return text.length > length ? text.substring(0, length) + '...' : text;
         },
-
+    
+    
         async loadRequestDetails(requestId) {
             if (!requestId) return;
             this.loadingHistory = true;
@@ -86,7 +87,7 @@
                 this.loadingHistory = false;
             }
         },
-
+    
         get paginatedData() {
             return this.data
                 .filter(item => {
@@ -100,7 +101,7 @@
                 })
                 .slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage);
         },
-
+    
         totalPages() {
             // Updated to match the filtering logic above
             return Math.ceil(this.data.filter(item => {
@@ -405,10 +406,11 @@
                                     <div class="mt-4 space-y-2 xl:h-[335px] overflow-y-auto pr-2">
                                         <!-- Loading indicator -->
                                         <div x-show="loadingHistory" class="flex justify-center items-center py-4">
-                                            <svg class="animate-spin h-5 w-5 text-green-600" xmlns="http://www.w3.org/2000/svg"
-                                                fill="none" viewBox="0 0 24 24">
-                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                                    stroke-width="4"></circle>
+                                            <svg class="animate-spin h-5 w-5 text-green-600"
+                                                xmlns="http://www.w3.org/2000/svg" fill="none"
+                                                viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10"
+                                                    stroke="currentColor" stroke-width="4"></circle>
                                                 <path class="opacity-75" fill="currentColor"
                                                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
                                                 </path>
@@ -427,23 +429,34 @@
                                                 <!-- Left: Date & Time -->
                                                 <div class="text-xs text-gray-600 w-1/3">
                                                     <p x-text="new Date(history.created_at).toLocaleDateString()"></p>
-                                                    <p x-text="new Date(history.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></p>
+                                                    <p
+                                                        x-text="new Date(history.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})">
+                                                    </p>
                                                 </div>
                                                 <!-- Right: Status & Technician -->
                                                 <div class="text-xs text-black w-2/3">
-                                                    <p><strong>Status:</strong> <span x-text="history.status"></span></p>
+                                                    <p><strong>Status:</strong> <span x-text="history.status"></span>
+                                                    </p>
                                                     <template x-if="history.status.toLowerCase() === 'pending'">
-                                                        <p><strong>Requester:</strong> <span x-text="details.requester"></span></p>
+                                                        <p><strong>Requester:</strong> <span
+                                                                x-text="details.requester"></span></p>
                                                     </template>
                                                     <template x-if="history.status.toLowerCase() !== 'pending'">
-                                                        <p x-show="history.technician_name"><strong>Technician:</strong> <span x-text="history.technician_name"></span></p>
+                                                        <p x-show="history.technician_name">
+                                                            <strong>Technician:</strong> <span
+                                                                x-text="history.technician_name"></span></p>
                                                     </template>
-                                                    <p x-show="history.encountered_problem_name"><strong>Problem:</strong> <span x-text="history.encountered_problem_name"></span></p>
-                                                    <p x-show="history.action_name"><strong>Action:</strong> <span x-text="history.action_name"></span></p>
-                                                    <p x-show="history.remarks"><strong>Remarks:</strong> <span x-text="history.remarks"></span></p>
+                                                    <p x-show="history.encountered_problem_name">
+                                                        <strong>Problem:</strong> <span
+                                                            x-text="history.encountered_problem_name"></span></p>
+                                                    <p x-show="history.action_name"><strong>Action:</strong> <span
+                                                            x-text="history.action_name"></span></p>
+                                                    <p x-show="history.remarks"><strong>Remarks:</strong> <span
+                                                            x-text="history.remarks"></span></p>
                                                     <p x-show="history.documentation">
                                                         <a :href="history.documentation" target="_blank"
-                                                            class="text-green-600 hover:underline">View Documentation</a>
+                                                            class="text-green-600 hover:underline">View
+                                                            Documentation</a>
                                                     </p>
                                                 </div>
                                             </div>
@@ -695,16 +708,21 @@
                             actual_client: 'N/A',
                             rating: '{{ $completedRequest->rating ?? 'N/A' }}',
                             // Add these new fields
-                            problem_name: '{{$completedRequest->problem_name}}',
-                            action_name: '{{$completedRequest->action_name}}',
+                            problem_name: '{{ $completedRequest->problem_name }}',
+                            action_name: '{{ $completedRequest->action_name }}',
 
-                            remarks: '{{ addslashes(App\Models\RequestStatusHistory::latestForStatus(
-                                $completedRequest->id,
-                                $completedRequest->is_others ?
-                                    ($completedRequest->status_abbr === 'DND' ? 'denied' :
-                                    ($completedRequest->status_abbr === 'CCL' ? 'cancelled' : 'completed')) :
-                                    'completed'
-                            )?->remarks ?? 'None') }}'
+                            remarks: '{{ addslashes(
+                                App\Models\RequestStatusHistory::latestForStatus(
+                                    $completedRequest->id,
+                                    $completedRequest->is_others
+                                        ? ($completedRequest->status_abbr === 'DND'
+                                            ? 'denied'
+                                            : ($completedRequest->status_abbr === 'CCL'
+                                                ? 'cancelled'
+                                                : 'completed'))
+                                        : 'completed',
+                                )?->remarks ?? 'None',
+                            ) }}'
                         }
                         @if (!$loop->last)
                             ,
