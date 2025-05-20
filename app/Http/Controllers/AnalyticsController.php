@@ -120,16 +120,8 @@ class AnalyticsController extends Controller
             return [$categoryName => $formattedTime];
         });
         // Get average turnaround time for all service requests
-        $averageTurnaroundTime = ServiceRequest::whereNotNull('updated_at')
-            ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, created_at, updated_at)) as average_turnaround_time_seconds')
-            ->value('average_turnaround_time_seconds');
-
-        // Calculate hours and minutes
-        $hours = floor($averageTurnaroundTime / 3600);
-        $minutes = floor(($averageTurnaroundTime % 3600) / 60);
-
-        // Format the output as "X hrs Y mins"
-        $averageTurnaroundTimeFormatted = "{$hours} hrs {$minutes} mins";
+        $averageTurnaroundTimeData = $this->calculateAverageTurnaroundTimeAllTechnicians();
+        $averageTurnaroundTimeFormatted = $averageTurnaroundTimeData['average_turnaround_time'] ?? '0 hrs 0 min';
 
         // Get the top actions taken
         $actionsData = $this->getTopActionsTaken();
@@ -189,18 +181,6 @@ class AnalyticsController extends Controller
         return $actionsData;
     }
 
-    public function getResolutionTimeData()
-    {
-        $categories = DB::table('lib_categories')->pluck('category_name');
-
-        // Dummy average resolution time (modify this based on actual data)
-        $averageTimes = array_fill(0, count($categories), 12.5);
-
-        return response()->json([
-            'categories' => $categories,
-            'averageTimes' => $averageTimes
-        ]);
-    }
 
     /**
      * Get service requests data grouped by office/location
@@ -269,5 +249,449 @@ class AnalyticsController extends Controller
                 ]
             ]
         ]);
+    }
+
+    /**
+     * Get turnaround time data by category for a specific technician
+     *
+     * @param int $technicianId The technician's ID
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTurnaroundTimeByCategory($technicianId)
+    {
+        $result = $this->calculateTurnaroundTimeByCategory($technicianId);
+        return response()->json($result);
+    }
+
+    /**
+     * Calculate the average turnaround time by category for a technician
+     *
+     * @param int $technicianId The technician's ID
+     * @return array
+     */
+    private function calculateTurnaroundTimeByCategory($technicianId)
+    {
+        try {
+            $results = DB::select("
+                WITH
+                request_periods AS (
+                    SELECT
+                        rsh.request_id,
+                        rsh.changed_by,
+                        rsh.status,
+                        rsh.created_at,
+                        LEAD(rsh.created_at) OVER (PARTITION BY rsh.request_id, rsh.changed_by ORDER BY rsh.created_at) AS next_timestamp,
+                        LEAD(rsh.status) OVER (PARTITION BY rsh.request_id, rsh.changed_by ORDER BY rsh.created_at) AS next_status
+                    FROM request_status_history rsh
+                    WHERE rsh.changed_by = ?
+                ),
+                active_periods AS (
+                    SELECT
+                        rp.request_id,
+                        rp.changed_by,
+                        rp.created_at AS period_start,
+                        rp.next_timestamp AS period_end,
+                        TIMESTAMPDIFF(SECOND, rp.created_at, rp.next_timestamp) AS period_seconds
+                    FROM request_periods rp
+                    WHERE
+                        rp.status = 'ongoing'
+                        AND rp.next_status IN ('paused', 'completed')
+                ),
+                request_active_times AS (
+                    SELECT
+                        ap.request_id,
+                        sr.category_id,
+                        lc.category_name,
+                        SUM(ap.period_seconds) AS total_active_seconds,
+                        CONCAT(
+                            FLOOR(SUM(ap.period_seconds) / 86400), ' days ',
+                            FLOOR((SUM(ap.period_seconds) % 86400) / 3600), ' hrs ',
+                            FLOOR((SUM(ap.period_seconds) % 3600) / 60), ' min ',
+                            SUM(ap.period_seconds) % 60, ' sec'
+                        ) AS formatted_duration
+                    FROM
+                        active_periods ap
+                    JOIN service_requests sr ON ap.request_id = sr.id
+                    JOIN lib_categories lc ON sr.category_id = lc.id
+                    GROUP BY
+                        ap.request_id, sr.category_id, lc.category_name
+                )
+                SELECT
+                    rat.category_id,
+                    rat.category_name,
+                    COUNT(*) AS request_count,
+                    SUM(rat.total_active_seconds) AS total_seconds,
+                    AVG(rat.total_active_seconds) AS avg_seconds,
+                    CONCAT(
+                        FLOOR(AVG(rat.total_active_seconds) / 86400), ' days ',
+                        FLOOR((AVG(rat.total_active_seconds) % 86400) / 3600), ' hrs ',
+                        FLOOR((AVG(rat.total_active_seconds) % 3600) / 60), ' min ',
+                        FLOOR(AVG(rat.total_active_seconds) % 60), ' sec'
+                    ) AS avg_formatted_duration
+                FROM
+                    request_active_times rat
+                GROUP BY
+                    rat.category_id, rat.category_name
+                ORDER BY
+                    avg_seconds ASC
+            ", [$technicianId]);
+
+            if (empty($results)) {
+                return [
+                    'success' => true,
+                    'message' => 'No data found',
+                    'categories' => []
+                ];
+            }
+
+            // Format the results for clearer display
+            $categories = [];
+            foreach ($results as $result) {
+                $categories[] = [
+                    'category_id' => $result->category_id,
+                    'category_name' => $result->category_name,
+                    'request_count' => $result->request_count,
+                    'avg_turnaround_time' => $result->avg_formatted_duration,
+                    'avg_seconds' => $result->avg_seconds,
+                    'total_seconds' => $result->total_seconds
+                ];
+            }
+
+            return [
+                'success' => true,
+                'categories' => $categories
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'message' => 'Error calculating turnaround time by category: ' . $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ];
+        }
+    }
+
+    /**
+     * Get the average turnaround time for a specific technician
+     *
+     * @param int $technicianId The technician's ID
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTurnaroundTime($technicianId)
+    {
+        $result = $this->calculateTurnaroundTime($technicianId);
+        return response()->json($result);
+    }
+
+    /**
+     * Helper method to calculate turnaround time with consistent formatting
+     *
+     * @param int $technicianId The technician's ID
+     * @return array
+     */
+    private function calculateTurnaroundTime($technicianId)
+    {
+        try {
+            $results = DB::select("
+                WITH
+                request_periods AS (
+                    SELECT
+                        request_id,
+                        changed_by,
+                        status,
+                        created_at,
+                        LEAD(created_at) OVER (PARTITION BY request_id, changed_by ORDER BY created_at) AS next_timestamp,
+                        LEAD(status) OVER (PARTITION BY request_id, changed_by ORDER BY created_at) AS next_status
+                    FROM request_status_history
+                    WHERE changed_by = ?
+                ),
+                active_periods AS (
+                    SELECT
+                        request_id,
+                        changed_by,
+                        created_at AS period_start,
+                        next_timestamp AS period_end,
+                        TIMESTAMPDIFF(SECOND, created_at, next_timestamp) AS period_seconds
+                    FROM request_periods
+                    WHERE
+                        status = 'ongoing'
+                        AND next_status IN ('paused', 'completed')
+                )
+                SELECT
+                    request_id,
+                    SUM(period_seconds) AS total_active_seconds,
+                    CONCAT(
+                        FLOOR(SUM(period_seconds) / 86400), ' days ',
+                        FLOOR((SUM(period_seconds) % 86400) / 3600), ' hrs ',
+                        FLOOR((SUM(period_seconds) % 3600) / 60), ' min ',
+                        SUM(period_seconds) % 60, ' sec'
+                    ) AS formatted_duration
+                FROM
+                    active_periods
+                GROUP BY
+                    request_id
+                ORDER BY
+                    total_active_seconds DESC
+            ", [$technicianId]);
+
+            if (empty($results)) {
+                return [
+                    'success' => true,
+                    'average_turnaround_time' => '0 days 0 hrs 0 min',
+                    'average_seconds' => 0,
+                    'requests_processed' => 0,
+                    'debug_info' => 'No active time periods found for this technician'
+                ];
+            }
+
+            // Calculate total active time and number of requests
+            $totalActiveSeconds = 0;
+            $requestsProcessed = count($results);
+
+            foreach ($results as $result) {
+                $totalActiveSeconds += $result->total_active_seconds;
+            }
+
+            // Calculate average time
+            $averageTimeSeconds = $totalActiveSeconds / $requestsProcessed;
+
+            // Format the average time
+            $days = floor($averageTimeSeconds / 86400);
+            $hours = floor(($averageTimeSeconds % 86400) / 3600);
+            $minutes = floor(($averageTimeSeconds % 3600) / 60);
+            $seconds = floor($averageTimeSeconds % 60);
+
+            $formattedTime = '';
+            if ($days > 0) $formattedTime .= "$days days ";
+            if ($hours > 0 || $days > 0) $formattedTime .= "$hours hrs ";
+            if ($minutes > 0 || $hours > 0 || $days > 0) $formattedTime .= "$minutes min ";
+            $formattedTime .= "$seconds sec";
+
+            return [
+                'success' => true,
+                'average_turnaround_time' => $formattedTime,
+                'average_seconds' => $averageTimeSeconds,
+                'requests_processed' => $requestsProcessed,
+                'total_seconds' => $totalActiveSeconds,
+                'debug_info' => $results
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'message' => 'Error calculating turnaround time: ' . $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ];
+        }
+    }
+
+    /**
+     * Get average turnaround time by category for all technicians
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTurnaroundTimesByCategory()
+    {
+        try {
+            // Get all technicians
+            $technicians = User::whereHas('role', function($query) {
+                $query->whereIn('role_name', ['Super Administrator', 'Administrator', 'Technician', 'Station Technician']);
+            })->pluck('philrice_id')->toArray();
+
+            // Collect data for all technicians
+            $allCategoriesData = [];
+
+            foreach ($technicians as $techId) {
+                $result = $this->calculateTurnaroundTimeByCategory($techId);
+
+                if ($result['success'] && !empty($result['categories'])) {
+                    foreach ($result['categories'] as $category) {
+                        $categoryId = $category['category_id'];
+                        $categoryName = $category['category_name'];
+
+                        if (!isset($allCategoriesData[$categoryId])) {
+                            $allCategoriesData[$categoryId] = [
+                                'name' => $categoryName,
+                                'total_seconds' => 0,
+                                'request_count' => 0
+                            ];
+                        }
+
+                        $allCategoriesData[$categoryId]['total_seconds'] += $category['total_seconds'];
+                        $allCategoriesData[$categoryId]['request_count'] += $category['request_count'];
+                    }
+                }
+            }
+
+            // Calculate average for each category
+            $labels = [];
+            $data = [];
+            $formattedTimes = [];
+
+            foreach ($allCategoriesData as $categoryId => $category) {
+                if ($category['request_count'] > 0) {
+                    $avgSeconds = $category['total_seconds'] / $category['request_count'];
+
+                    $labels[] = $category['name'];
+                    $data[] = round($avgSeconds / 3600, 2); // Convert to hours
+
+                    // Format nice human-readable time
+                    $days = floor($avgSeconds / 86400);
+                    $hours = floor(($avgSeconds % 86400) / 3600);
+                    $minutes = floor(($avgSeconds % 3600) / 60);
+
+                    $formattedTime = '';
+                    if ($days > 0) $formattedTime .= "$days days ";
+                    if ($hours > 0 || $days > 0) $formattedTime .= "$hours hrs ";
+                    if ($minutes > 0 || $hours > 0 || $days > 0) $formattedTime .= "$minutes min";
+                    if (empty($formattedTime)) $formattedTime = "Less than 1 min";
+
+                    $formattedTimes[] = $formattedTime;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'labels' => $labels,
+                'data' => $data,
+                'formattedTimes' => $formattedTimes
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error getting turnaround times: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Calculate average turnaround time for all technicians
+     *
+     * @return array
+     */
+    private function calculateAverageTurnaroundTimeAllTechnicians()
+    {
+        try {
+            // Get all technicians
+            $technicians = User::whereHas('role', function($query) {
+                $query->whereIn('role_name', ['Super Administrator', 'Administrator', 'Technician', 'Station Technician']);
+            })->pluck('philrice_id')->toArray();
+
+            $totalSeconds = 0;
+            $totalRequests = 0;
+
+            // Calculate turnaround time for each technician
+            foreach ($technicians as $technicianId) {
+                $result = $this->calculateTurnaroundTime($technicianId);
+
+                if ($result['success'] && isset($result['total_seconds']) && isset($result['requests_processed'])) {
+                    $totalSeconds += $result['total_seconds'];
+                    $totalRequests += $result['requests_processed'];
+                }
+            }
+
+            // Calculate the overall average
+            if ($totalRequests > 0) {
+                $averageSeconds = $totalSeconds / $totalRequests;
+
+                // Format the time
+                $days = floor($averageSeconds / 86400);
+                $hours = floor(($averageSeconds % 86400) / 3600);
+                $minutes = floor(($averageSeconds % 3600) / 60);
+                $seconds = floor($averageSeconds % 60);
+
+                $formattedTime = '';
+                if ($days > 0) $formattedTime .= "$days days ";
+                if ($hours > 0 || $days > 0) $formattedTime .= "$hours hrs ";
+                if ($minutes > 0 || $hours > 0 || $days > 0) $formattedTime .= "$minutes min";
+
+                return [
+                    'success' => true,
+                    'average_turnaround_time' => $formattedTime,
+                    'average_seconds' => $averageSeconds,
+                    'total_requests' => $totalRequests
+                ];
+            }
+
+            return [
+                'success' => true,
+                'average_turnaround_time' => '0 hrs 0 min',
+                'average_seconds' => 0,
+                'total_requests' => 0
+            ];
+
+        } catch (\Exception $e) {
+            \Log::error('Error calculating average turnaround time: ' . $e->getMessage());
+
+            return [
+                'success' => false,
+                'average_turnaround_time' => '0 hrs 0 min',
+                'average_seconds' => 0,
+                'total_requests' => 0,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Get average turnaround time (API endpoint)
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getAverageTurnaroundTime(Request $request)
+    {
+        $categoryId = $request->input('category_id');
+
+        // If category_id is provided, filter by category
+        if ($categoryId) {
+            // Calculate category-specific turnaround time
+            $technicians = User::whereHas('role', function($query) {
+                $query->whereIn('role_name', ['Super Administrator', 'Administrator', 'Technician', 'Station Technician']);
+            })->pluck('philrice_id')->toArray();
+
+            $totalSeconds = 0;
+            $totalRequests = 0;
+
+            foreach ($technicians as $techId) {
+                $result = $this->calculateTurnaroundTimeByCategory($techId);
+                if ($result['success'] && !empty($result['categories'])) {
+                    foreach ($result['categories'] as $category) {
+                        if ($category['category_id'] == $categoryId) {
+                            $totalSeconds += $category['total_seconds'];
+                            $totalRequests += $category['request_count'];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if ($totalRequests > 0) {
+                $averageSeconds = $totalSeconds / $totalRequests;
+
+                // Format the average time
+                $days = floor($averageSeconds / 86400);
+                $hours = floor(($averageSeconds % 86400) / 3600);
+                $minutes = floor(($averageSeconds % 3600) / 60);
+                $seconds = floor($averageSeconds % 60);
+
+                $formattedTime = '';
+                if ($days > 0) $formattedTime .= "$days days ";
+                if ($hours > 0 || $days > 0) $formattedTime .= "$hours hrs ";
+                if ($minutes > 0 || $hours > 0 || $days > 0) $formattedTime .= "$minutes min ";
+                $formattedTime .= "$seconds sec";
+
+                return response()->json([
+                    'success' => true,
+                    'average_turnaround_time' => $formattedTime,
+                    'average_seconds' => $averageSeconds,
+                    'total_requests' => $totalRequests
+                ]);
+            }
+        }
+
+        // Use the existing method for general average
+        $data = $this->calculateAverageTurnaroundTimeAllTechnicians();
+        return response()->json($data);
     }
 }

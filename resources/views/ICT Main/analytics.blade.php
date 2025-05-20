@@ -39,9 +39,14 @@
             </div>
 
             <!-- All SERVICE CATEGORY Dropdown -->
+<<<<<<< HEAD
             <select id="category-filter" 
                 class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500"
                 onchange="refreshAnalyticsData()">
+=======
+            <select id="category-filter"
+                class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500">
+>>>>>>> 9d16875405fbc5c02cca15a41ae8ccb7402725ba
                 <option value="">ALL SERVICE CATEGORY</option>
                 @foreach ($categories as $id => $category)
                     <option value="{{ $id }}">{{ $category }}</option>
@@ -60,8 +65,12 @@
                     Auth::user()->role_id == DB::table('lib_roles')->where('role_name', 'Super Administrator')->value('id'))
                 <!-- ALL TECHNICIANS Dropdown (Visible Only for Super Admin) -->
                 <select id="technician-filter"
+<<<<<<< HEAD
                     class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500"
                     onchange="refreshAnalyticsData()">
+=======
+                    class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500">
+>>>>>>> 9d16875405fbc5c02cca15a41ae8ccb7402725ba
                     <option value="">ALL TECHNICIANS</option>
                     @foreach ($technicians as $technician)
                         <option value="{{ $technician->philrice_id }}">{{ $technician->name }}</option>
@@ -283,7 +292,7 @@
                     <!-- Right Section: Date, Gray Circle, Download Button -->
                     <div class="flex flex-wrap items-center gap-2">
                         <div class="text-[10px] text-gray-500 text-right">
-                            <p>January 1, 2025 to February 28, 2025</p>
+                            <p>January 1, 5 to February 28, 2025</p>
                             <p class="text-gray-400">All Service Category | PhilRice CES</p>
                         </div>
 
@@ -652,13 +661,14 @@
 
             const ctx3 = document.getElementById("resolutionTimeChart").getContext("2d");
 
-            new Chart(ctx3, {
+            // Initialize empty chart first (will be updated with data)
+            let resolutionTimeChart = new Chart(ctx3, {
                 type: "bar",
                 data: {
-                    labels: categoryNames, // Now using category names instead of IDs
+                    labels: [],
                     datasets: [{
                         label: "Average Resolution Time (hrs)",
-                        data: averageTimeValues,
+                        data: [],
                         backgroundColor: "#1E293B",
                     }]
                 },
@@ -703,13 +713,44 @@
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    return `${averageTimes[categoryNames[context.dataIndex]]}`;
+                                    // Will be replaced with actual formatted time from API
+                                    return `${context.raw} hours`;
                                 }
                             }
                         }
                     }
                 }
             });
+
+            // Fetch turnaround time data from our new API endpoint
+            fetch('/ServiceTrackerGithub/analytics/turnaround-times-by-category')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Update chart with the data
+                        resolutionTimeChart.data.labels = data.labels;
+                        resolutionTimeChart.data.datasets[0].data = data.data;
+
+                        // Update the tooltip callback to use formatted times
+                        resolutionTimeChart.options.plugins.tooltip.callbacks.label = function(context) {
+                            const index = context.dataIndex;
+                            return `Average: ${data.formattedTimes[index]}`;
+                        };
+
+                        resolutionTimeChart.update();
+                    } else {
+                        console.error('Error loading turnaround time data:', data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching turnaround time data:', error);
+                });
+
             // Add responsive adjustments for laptop screens
             function adjustForScreenSize() {
                 const width = window.innerWidth;
@@ -726,6 +767,143 @@
             // Call on load and resize
             adjustForScreenSize();
             window.addEventListener('resize', adjustForScreenSize);
+
+            // Add event listener to technician filter dropdown
+            const technicianFilter = document.getElementById('technician-filter');
+            if (technicianFilter) {
+                technicianFilter.addEventListener('change', function() {
+                    updateAverageTurnaroundTime();
+
+                    // Also update the resolution chart by category for this technician
+                    updateResolutionTimeChart();
+                });
+            }
+
+            // Function to update average turnaround time based on selected technician
+            function updateAverageTurnaroundTime() {
+                const technicianId = technicianFilter ? technicianFilter.value : '';
+                const turnaroundTimeDisplay = document.querySelector('.text-3xl.font-bold.text-gray-900');
+                const turnaroundTimeSection = turnaroundTimeDisplay.closest('.bg-white');
+                const subtitle = turnaroundTimeSection.querySelector('.text-[10px]');
+
+                // Show loading indicator
+                turnaroundTimeDisplay.textContent = 'Loading...';
+
+                let endpoint = '/ServiceTrackerGithub/analytics/average-turnaround-time';
+
+                // If technician is selected, use specific endpoint with the technician's ID
+                if (technicianId) {
+                    endpoint = `/ServiceTrackerGithub/analytics/turnaround-time/${technicianId}`;
+                }
+
+                // Fetch turnaround time data
+                fetch(endpoint)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            console.log("Turnaround time data:", data); // Debug output
+
+                            // Update the displayed turnaround time
+                            turnaroundTimeDisplay.textContent = data.average_turnaround_time;
+
+                            // Update subtitle for the turnaround section
+                            if (technicianId) {
+                                // Find technician name from dropdown
+                                const selectedOption = technicianFilter.options[technicianFilter.selectedIndex];
+                                const technicianName = selectedOption.textContent;
+
+                                // Update both date and category/technician info
+                                const dateInfo = subtitle.querySelector('p:first-child');
+                                if (dateInfo) dateInfo.textContent = 'Technician-specific data';
+
+                                const categoryInfo = subtitle.querySelector('span.text-gray-400');
+                                if (categoryInfo) categoryInfo.textContent = `Technician: ${technicianName} | PhilRice CES`;
+                            } else {
+                                // Reset to default display
+                                const dateInfo = subtitle.querySelector('p:first-child');
+                                if (dateInfo) dateInfo.textContent = 'January 1, 2025 to February 28, 2025';
+
+                                const categoryInfo = subtitle.querySelector('span.text-gray-400');
+                                if (categoryInfo) categoryInfo.textContent = 'All Service Category | PhilRice CES';
+                            }
+                        } else {
+                            turnaroundTimeDisplay.textContent = '0 hrs 0 min';
+                            console.error('Error loading turnaround time:', data.message);
+                        }
+                    })
+                    .catch(error => {
+                        turnaroundTimeDisplay.textContent = '0 hrs 0 min';
+                        console.error('Error fetching turnaround time data:', error);
+                    });
+            }
+
+            // Function to update Resolution Time by Category chart
+            function updateResolutionTimeChart() {
+                const technicianId = technicianFilter ? technicianFilter.value : '';
+
+                let endpoint = '/ServiceTrackerGithub/analytics/turnaround-times-by-category';
+
+                // If technician is selected, use specific endpoint
+                if (technicianId) {
+                    endpoint = `/ServiceTrackerGithub/analytics/turnaround-time-by-category/${technicianId}`;
+                }
+
+                fetch(endpoint)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // For technician-specific data, convert format
+                            let chartLabels = [];
+                            let chartData = [];
+                            let formattedTimes = [];
+
+                            if (technicianId && data.categories) {
+                                // Process technician-specific data format
+                                data.categories.forEach(cat => {
+                                    chartLabels.push(cat.category_name);
+                                    chartData.push(cat.avg_seconds / 3600); // Convert to hours
+                                    formattedTimes.push(cat.avg_turnaround_time);
+                                });
+                            } else {
+                                // Existing format for all technicians
+                                chartLabels = data.labels;
+                                chartData = data.data;
+                                formattedTimes = data.formattedTimes;
+                            }
+
+                            // Update chart with the data
+                            resolutionTimeChart.data.labels = chartLabels;
+                            resolutionTimeChart.data.datasets[0].data = chartData;
+
+                            // Update chart title based on selection
+                            const chartTitle = document.querySelector(".bg-white:last-child h2.text-xl");
+                            if (chartTitle) {
+                                if (technicianId) {
+                                    const selectedOption = technicianFilter.options[technicianFilter.selectedIndex];
+                                    const technicianName = selectedOption.textContent;
+                                    chartTitle.textContent = `Resolution Time by Category for ${technicianName}`;
+                                } else {
+                                    chartTitle.textContent = "Average Resolution Time by Service Category";
+                                }
+                            }
+
+                            // Update the tooltip callback to use formatted times
+                            resolutionTimeChart.options.plugins.tooltip.callbacks.label = function(context) {
+                                const index = context.dataIndex;
+                                return `Average: ${formattedTimes[index] || 'N/A'}`;
+                            };
+
+                            resolutionTimeChart.update();
+                        } else {
+                            console.error('Error loading resolution time data:', data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching resolution time data:', error);
+                    });
+            }
+
+            // ...existing code...
         });
 
         function loadLocationChart() {
@@ -789,4 +967,479 @@
                 // ...existing code...
         }
     </script>
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // ... existing initialization code ...
+
+        // Manually trigger the technician filter function once to ensure it works
+        const technicianFilter = document.getElementById('technician-filter');
+        if (technicianFilter) {
+            // Add a debug log to check if filter is found
+            console.log("Technician filter found:", technicianFilter);
+
+            technicianFilter.addEventListener('change', function() {
+                console.log("Technician selected:", this.value);
+                updateAverageTurnaroundTime();
+                updateResolutionTimeChart();
+            });
+
+            // Test if routes are working by console logging response
+            fetch('/ServiceTrackerGithub/analytics/average-turnaround-time')
+                .then(response => response.json())
+                .then(data => console.log("API endpoint test:", data))
+                .catch(error => console.error("API endpoint error:", error));
+        } else {
+            console.error("Technician filter element not found!");
+        }
+
+        // Function to update average turnaround time based on selected technician
+        function updateAverageTurnaroundTime() {
+            const technicianId = technicianFilter ? technicianFilter.value : '';
+            const turnaroundTimeDisplay = document.querySelector('.text-3xl.font-bold.text-gray-900');
+
+            console.log("Updating turnaround time for technician:", technicianId);
+
+            // Show loading indicator
+            if (turnaroundTimeDisplay) {
+                turnaroundTimeDisplay.textContent = 'Loading...';
+
+                let endpoint = '/ServiceTrackerGithub/analytics/average-turnaround-time';
+
+                // If technician is selected, use specific endpoint
+                if (technicianId) {
+                    endpoint = `/ServiceTrackerGithub/analytics/turnaround-time/${technicianId}`;
+                }
+
+                console.log("Fetching from endpoint:", endpoint);
+
+                // Fetch turnaround time data
+                fetch(endpoint)
+                    .then(response => {
+                        console.log("Response status:", response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log("Turnaround time data received:", data);
+
+                        if (data.success) {
+                            // Update the displayed turnaround time
+                            turnaroundTimeDisplay.textContent = data.average_turnaround_time;
+
+                            // Update the subtitle text for the turnaround section
+                            // Fix: Use valid CSS selectors that don't rely on Tailwind classes directly
+                            const subtitleSection = turnaroundTimeDisplay.closest('.bg-white');
+                            if (subtitleSection) {
+                                // Find the subtitle container (more specific selector)
+                                const subtitleContainer = subtitleSection.querySelector('.flex.items-center .flex.flex-col');
+                                if (subtitleContainer) {
+                                    if (technicianId) {
+                                        // Find technician name from dropdown
+                                        const selectedOption = technicianFilter.options[technicianFilter.selectedIndex];
+                                        const technicianName = selectedOption.textContent;
+
+                                        // Update the paragraph and span elements directly
+                                        const paragraphs = subtitleContainer.querySelectorAll('p');
+                                        if (paragraphs.length > 0) {
+                                            paragraphs[0].textContent = 'Technician-specific data';
+                                        }
+
+                                        const spans = subtitleContainer.querySelectorAll('span');
+                                        if (spans.length > 0) {
+                                            // Match the format in both scripts: "Technician: Name | PhilRice CES"
+                                            spans[0].textContent = `Technician: ${technicianName} | PhilRice CES`;
+
+                                            // Add requests processed info if available
+                                            if (data.requests_processed) {
+                                                const requestCount = parseInt(data.requests_processed);
+                                                const requestText = requestCount === 1 ? "1 request processed" : `${requestCount} requests processed`;
+
+                                                // Append request count to the span text
+                                                spans[0].textContent += ` (${requestText})`;
+                                            }
+                                        }
+                                    } else {
+                                        // Reset to default display
+                                        const paragraphs = subtitleContainer.querySelectorAll('p');
+                                        if (paragraphs.length > 0) {
+                                            paragraphs[0].textContent = 'January 1, 2025 to February 28, 2025';
+                                        }
+
+                                        const spans = subtitleContainer.querySelectorAll('span');
+                                        if (spans.length > 0) {
+                                            spans[0].textContent = 'All Service Category | PhilRice CES';
+                                        }
+                                    }
+                                } else {
+                                    console.error("Subtitle container not found");
+                                }
+                            } else {
+                                console.error("Subtitle section not found");
+                            }
+                        } else {
+                            turnaroundTimeDisplay.textContent = '0 hrs 0 min';
+                            console.error('Error loading turnaround time:', data.message);
+                        }
+                    })
+                    .catch(error => {
+                        turnaroundTimeDisplay.textContent = '0 hrs 0 min';
+                        console.error('Error fetching turnaround time data:', error);
+                    });
+            } else {
+                console.error("Turnaround time display element not found!");
+            }
+        }
+
+        // Function to update Resolution Time by Category chart
+        function updateResolutionTimeChart() {
+            // ... existing code ...
+        }
+
+        // ... existing code ...
+    });
+</script>
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // ... existing initialization code ...
+
+        // Initialize all filters
+        const technicianFilter = document.getElementById('technician-filter');
+        const categoryFilter = document.getElementById('category-filter'); // New category filter
+
+        // Listen for changes on the category dropdown
+        if (categoryFilter) {
+            console.log("Category filter found:", categoryFilter);
+
+            categoryFilter.addEventListener('change', function() {
+                console.log("Category selected:", this.value);
+                // Update all visualizations when category changes
+                updateAverageTurnaroundTime();
+                updateResolutionTimeChart();
+                updateOfficeChart();
+            });
+        } else {
+            console.error("Category filter element not found!");
+        }
+
+        // ... existing technician filter code ...
+
+        // Modify the updateAverageTurnaroundTime function to include category filter
+        function updateAverageTurnaroundTime() {
+            const technicianId = technicianFilter ? technicianFilter.value : '';
+            const categoryId = categoryFilter ? categoryFilter.value : '';
+            const turnaroundTimeDisplay = document.querySelector('.text-3xl.font-bold.text-gray-900');
+
+            console.log("Updating turnaround time - Technician:", technicianId, "Category:", categoryId);
+
+            // Show loading indicator
+            if (turnaroundTimeDisplay) {
+                turnaroundTimeDisplay.textContent = 'Loading...';
+
+                // Build the URL with query parameters
+                let endpoint = '/ServiceTrackerGithub/analytics/average-turnaround-time';
+                const params = new URLSearchParams();
+
+                if (technicianId) {
+                    endpoint = `/ServiceTrackerGithub/analytics/turnaround-time/${technicianId}`;
+                }
+
+                if (categoryId) {
+                    params.append('category_id', categoryId);
+                }
+
+                const queryString = params.toString() ? `?${params.toString()}` : '';
+                const fullEndpoint = `${endpoint}${queryString}`;
+
+                console.log("Fetching from endpoint:", fullEndpoint);
+
+                // Fetch turnaround time data
+                fetch(fullEndpoint)
+                    .then(response => {
+                        console.log("Response status:", response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log("Turnaround time data received:", data);
+
+                        if (data.success) {
+                            // Update the displayed turnaround time
+                            turnaroundTimeDisplay.textContent = data.average_turnaround_time;
+
+                            // Update the subtitle text for the turnaround section
+                            const subtitleSection = turnaroundTimeDisplay.closest('.bg-white');
+                            if (subtitleSection) {
+                                const subtitleContainer = subtitleSection.querySelector('.flex.items-center .flex.flex-col');
+                                if (subtitleContainer) {
+                                    // Update subtitle based on selected filters
+                                    updateSubtitleText(subtitleContainer, technicianId, categoryId, data);
+                                } else {
+                                    console.error("Subtitle container not found");
+                                }
+                            } else {
+                                console.error("Subtitle section not found");
+                            }
+                        } else {
+                            turnaroundTimeDisplay.textContent = '0 hrs 0 min';
+                            console.error('Error loading turnaround time:', data.message);
+                        }
+                    })
+                    .catch(error => {
+                        turnaroundTimeDisplay.textContent = '0 hrs 0 min';
+                        console.error('Error fetching turnaround time data:', error);
+                    });
+            } else {
+                console.error("Turnaround time display element not found!");
+            }
+        }
+
+        // Helper function to update subtitle text based on filters
+        function updateSubtitleText(subtitleContainer, technicianId, categoryId, data) {
+            const paragraphs = subtitleContainer.querySelectorAll('p');
+            const spans = subtitleContainer.querySelectorAll('span');
+
+            if (paragraphs.length > 0 && spans.length > 0) {
+                // Date range text always stays as "Filtered data" when any filter is applied
+                if (technicianId || categoryId) {
+                    paragraphs[0].textContent = 'Filtered data';
+                } else {
+                    paragraphs[0].textContent = 'January 1, 2025 to February 28, 2025';
+                }
+
+                // Build category/technician text
+                let categoryText = 'All Service Category';
+                if (categoryId) {
+                    categoryText = categoryFilter.options[categoryFilter.selectedIndex].text;
+                }
+
+                let technicianText = '';
+                if (technicianId) {
+                    const selectedOption = technicianFilter.options[technicianFilter.selectedIndex];
+                    technicianText = ` | Technician: ${selectedOption.textContent}`;
+
+                    // Add requests processed info if available
+                    if (data.requests_processed) {
+                        const requestCount = parseInt(data.requests_processed);
+                        const requestText = requestCount === 1 ? "1 request processed" : `${requestCount} requests processed`;
+                        technicianText += ` (${requestText})`;
+                    }
+                }
+
+                spans[0].textContent = `${categoryText} | PhilRice CES${technicianText}`;
+            }
+        }
+
+        // Modify the updateResolutionTimeChart function to include category filter
+        function updateResolutionTimeChart() {
+            const technicianId = technicianFilter ? technicianFilter.value : '';
+            const categoryId = categoryFilter ? categoryFilter.value : '';
+
+            let endpoint = '/ServiceTrackerGithub/analytics/turnaround-times-by-category';
+            const params = new URLSearchParams();
+
+            // If technician is selected, use specific endpoint
+            if (technicianId) {
+                endpoint = `/ServiceTrackerGithub/analytics/turnaround-time-by-category/${technicianId}`;
+            }
+
+            // Add category filter if selected
+            if (categoryId) {
+                params.append('category_id', categoryId);
+            }
+
+            const queryString = params.toString() ? `?${params.toString()}` : '';
+            const fullEndpoint = `${endpoint}${queryString}`;
+
+            console.log("Fetching resolution time chart data from:", fullEndpoint);
+
+            fetch(fullEndpoint)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // For technician-specific data, convert format
+                        let chartLabels = [];
+                        let chartData = [];
+                        let formattedTimes = [];
+
+                        if (technicianId && data.categories) {
+                            // Process technician-specific data format
+                            data.categories.forEach(cat => {
+                                // If category filter is applied, only show matching category
+                                if (!categoryId || categoryId == cat.category_id) {
+                                    chartLabels.push(cat.category_name);
+                                    chartData.push(cat.avg_seconds / 3600); // Convert to hours
+                                    formattedTimes.push(cat.avg_turnaround_time);
+                                }
+                            });
+                        } else {
+                            // Existing format for all technicians
+                            if (categoryId) {
+                                // Filter to show only the selected category
+                                const index = data.labels.findIndex(label =>
+                                    label === categoryFilter.options[categoryFilter.selectedIndex].text);
+
+                                if (index !== -1) {
+                                    chartLabels = [data.labels[index]];
+                                    chartData = [data.data[index]];
+                                    formattedTimes = [data.formattedTimes[index]];
+                                } else {
+                                    chartLabels = data.labels;
+                                    chartData = data.data;
+                                    formattedTimes = data.formattedTimes;
+                                }
+                            } else {
+                                chartLabels = data.labels;
+                                chartData = data.data;
+                                formattedTimes = data.formattedTimes;
+                            }
+                        }
+
+                        // Update chart with the data
+                        resolutionTimeChart.data.labels = chartLabels;
+                        resolutionTimeChart.data.datasets[0].data = chartData;
+
+                        // Update chart title based on selection
+                        const chartTitle = document.querySelector(".bg-white:last-child h2.text-xl");
+                        if (chartTitle) {
+                            let titleText = "Average Resolution Time by Service Category";
+
+                            if (technicianId) {
+                                const selectedOption = technicianFilter.options[technicianFilter.selectedIndex];
+                                titleText = `Resolution Time by Category for ${selectedOption.textContent}`;
+                            }
+
+                            if (categoryId) {
+                                const selectedCategory = categoryFilter.options[categoryFilter.selectedIndex].text;
+                                titleText += ` - ${selectedCategory}`;
+                            }
+
+                            chartTitle.textContent = titleText;
+                        }
+
+                        // Update the tooltip callback to use formatted times
+                        resolutionTimeChart.options.plugins.tooltip.callbacks.label = function(context) {
+                            const index = context.dataIndex;
+                            return `Average: ${formattedTimes[index] || 'N/A'}`;
+                        };
+
+                        resolutionTimeChart.update();
+                    } else {
+                        console.error('Error loading resolution time data:', data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching resolution time data:', error);
+                });
+        }
+
+        // Function to update Office chart with filters
+        function updateOfficeChart() {
+            const technicianId = technicianFilter ? technicianFilter.value : '';
+            const categoryId = categoryFilter ? categoryFilter.value : '';
+
+            // Build query parameters
+            const params = new URLSearchParams();
+            if (categoryId) params.append('category_id', categoryId);
+            if (technicianId) params.append('technician_id', technicianId);
+
+            // Get date filter values if they exist
+            const fromDate = document.getElementById('from-date').value || null;
+            const toDate = document.getElementById('to-date').value || null;
+            if (fromDate) params.append('start_date', fromDate);
+            if (toDate) params.append('end_date', toDate);
+
+            const queryString = params.toString() ? `?${params.toString()}` : '';
+
+            // Get chart instance if it exists
+            if (window.serviceRequestsBarChart) {
+                window.serviceRequestsBarChart.destroy();
+            }
+
+            const ctx2 = document.getElementById("serviceRequestsBar").getContext("2d");
+
+            console.log("Updating office chart with filters:", queryString);
+
+            fetch(`/ServiceTrackerGithub/analytics/requests-by-office${queryString}`)
+                .then(response => response.json())
+                .then(data => {
+                    window.serviceRequestsBarChart = new Chart(ctx2, {
+                        type: "bar",
+                        data: {
+                            labels: data.labels,
+                            datasets: data.datasets
+                        },
+                        options: {
+                            indexAxis: "y",
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            barThickness: 15,
+                            scales: {
+                                x: {
+                                    ticks: {
+                                        display: false
+                                    },
+                                    grid: {
+                                        display: false
+                                    }
+                                },
+                                y: {
+                                    ticks: {
+                                        color: "#000",
+                                        autoSkip: false,
+                                        callback: function(value, index) {
+                                            let label = this.getLabelForValue(value);
+                                            return label.length > 20 ? label.substring(0, 18) + '...' : label;
+                                        }
+                                    },
+                                    grid: {
+                                        display: false
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        title: function(tooltipItems) {
+                                            return data.labels[tooltipItems[0].dataIndex];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    // Update all office chart headers to show filters
+                    updateOfficeChartHeaders(technicianId, categoryId);
+                })
+                .catch(error => {
+                    console.error("Error updating office chart:", error);
+                });
+        }
+
+        // Update headers for office chart
+        function updateOfficeChartHeaders(technicianId, categoryId) {
+            const headers = document.querySelectorAll('.bg-white .text-[10px].text-gray-500.text-right');
+            headers.forEach(header => {
+                const categoryInfo = header.querySelector('.text-gray-400');
+                if (categoryInfo) {
+                    let categoryText = 'All Service Category';
+                    if (categoryId) {
+                        categoryText = categoryFilter.options[categoryFilter.selectedIndex].text;
+                    }
+
+                    let technicianText = '';
+                    if (technicianId) {
+                        const selectedOption = technicianFilter.options[technicianFilter.selectedIndex];
+                        technicianText = ` | Technician: ${selectedOption.textContent}`;
+                    }
+
+                    categoryInfo.textContent = `${categoryText} | PhilRice CES${technicianText}`;
+                }
+            });
+        }
+
+        // ... existing code ...
+    });
+</script>
 </x-layout>
