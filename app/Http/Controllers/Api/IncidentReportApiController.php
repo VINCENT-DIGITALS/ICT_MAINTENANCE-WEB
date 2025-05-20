@@ -46,12 +46,60 @@ class IncidentReportApiController extends Controller
             )
             ->get();
 
+        // Get all relevant user IDs from the incidents
+        $userIds = [];
+        foreach ($incidents as $incident) {
+            if (!empty($incident->verifier_id)) {
+                $userIds[] = $incident->verifier_id;
+            }
+            if (!empty($incident->approver_id)) {
+                $userIds[] = $incident->approver_id;
+            }
+        }
+
+        // Get all users in a single query (for efficiency)
+        $users = [];
+        if (!empty($userIds)) {
+            $usersCollection = DB::table('users')->whereIn('id', array_unique($userIds))->get();
+            foreach ($usersCollection as $user) {
+                $users[$user->id] = $user;
+            }
+        }
+
+        // Update incident names with user information
+        $updatedIncidents = [];
+        foreach ($incidents as $incident) {
+            $incidentData = (array) $incident;
+            
+            // Update verifier name if ID exists and user found
+            if (!empty($incidentData['verifier_id']) && isset($users[$incidentData['verifier_id']])) {
+                $verifier = $users[$incidentData['verifier_id']];
+                if (isset($verifier->name)) {
+                    $incidentData['verifier_name'] = $verifier->name;
+                } elseif (isset($verifier->firstname) && isset($verifier->lastname)) {
+                    $incidentData['verifier_name'] = $verifier->firstname . ' ' . $verifier->lastname;
+                }
+            }
+            
+            // Update approver name if ID exists and user found
+            if (!empty($incidentData['approver_id']) && isset($users[$incidentData['approver_id']])) {
+                $approver = $users[$incidentData['approver_id']];
+                if (isset($approver->name)) {
+                    $incidentData['approver_name'] = $approver->name;
+                } elseif (isset($approver->firstname) && isset($approver->lastname)) {
+                    $incidentData['approver_name'] = $approver->firstname . ' ' . $approver->lastname;
+                }
+            }
+            
+            $updatedIncidents[] = (object) $incidentData;
+        }
+
         // Return response in standardized format
         return response()->json([
             'status' => true,
             'data' => [
-                'incidents' => $incidents,
-                'incidentsCount' => $incidents->count(),
+                'incidents' => $updatedIncidents,
+                'incidentsCount' => count($updatedIncidents),
                 'categories' => $categories,
                 'technicians' => $technicians
             ]
@@ -138,18 +186,7 @@ class IncidentReportApiController extends Controller
 
     public function update(Request $request, $id)
     {
-        // Validate the ID parameter
-        if (!is_numeric($id) || (int)$id <= 0) {
-            return response()->json([
-                'status' => false,
-                'data' => [
-                    'message' => 'Invalid incident ID'
-                ]
-            ], 400);
-        }
-
         $request->validate([
-            'id' => 'required|integer|exists:lib_incident_reports,id', // Add validation for ID
             'priority_level' => 'required|string',
             'incident_name' => 'required|string',
             'incident_nature' => 'required|string',
