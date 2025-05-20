@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\DashboardApiController;
 use App\Http\Controllers\Api\OngoingRequestApiController;
 use App\Http\Controllers\Api\CompletedRequestApiController;
 use App\Http\Controllers\Api\PingController;
+use App\Http\Controllers\Api\IncidentReportApiController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -35,7 +36,8 @@ Route::middleware('auth:sanctum')->post('/logout', [UserController::class, 'logo
 
 
 Route::get('/dashboard', [DashboardApiController::class, 'dashboardData']);
-
+Route::post('/dashboard/storeNewRequest', [DashboardApiController::class, 'storeNewRequest']);
+Route::post('/dashboard/checkUserPendingRequestsLimit/{id}', [DashboardApiController::class, 'checkUserPendingRequestsLimit']);
 
 Route::get('/picked', [PickedRequestApiController::class, 'fetchpPickedRequests']);
 Route::post('/picked/changeToOngoing/{id}/{user_idno}', [PickedRequestApiController::class, 'markAsOngoing']);
@@ -63,3 +65,15 @@ Route::get('/ongoing/problems-encountered', [OngoingRequestApiController::class,
 
 Route::get('/completed', [CompletedRequestApiController::class, 'fetchCompleteRequests']);
 Route::post('/completed/sendMessageToClient', [CompletedRequestApiController::class, 'sendMessageToClient']);
+
+
+Route::get('/incident-reports', [IncidentReportApiController::class, 'customerFeedRequests']);
+//For resolve
+Route::post('/incident-reports/resolve', [IncidentReportApiController::class, 'resolve']);
+//For store
+Route::post('/incident-reports/store', [IncidentReportApiController::class, 'store']);
+
+// Service Category API Routes
+// Route::get('/categories', [App\Http\Controllers\Api\DashboardApiController::class, 'getServiceCategories']);
+// Route::get('/categories/{categoryId}/subcategories', [App\Http\Controllers\Api\DashboardApiController::class, 'getSubcategories']);
+Route::get('/categories-with-subcategories', [App\Http\Controllers\Api\DashboardApiController::class, 'getCategoriesWithSubcategories']);

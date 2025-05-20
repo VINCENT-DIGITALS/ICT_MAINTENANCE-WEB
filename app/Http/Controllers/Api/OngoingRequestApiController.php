@@ -157,11 +157,35 @@ class OngoingRequestApiController extends Controller
 
         $histories = $serviceRequest->statusHistories;
 
+        // Define statuses to check for
+        $terminalStatuses = ['completed', 'Denied', 'cancelled', 'Evaluated'];
+
         // ✅ Compute working time (only for 'ongoing' periods, stop when 'paused' or status changes)
         $workingTime = 0;
         $startTime = null;
 
         foreach ($histories as $history) {
+            // Check for terminal statuses (completed, Denied, cancelled, Evaluated)
+            if (
+                in_array($history->status, $terminalStatuses) ||
+                in_array(strtolower($history->status), array_map('strtolower', $terminalStatuses))
+            ) {
+
+                $serviceRequest->completion_date = $history->created_at;
+                $serviceRequest->completed_by = $history->changed_by;
+                $serviceRequest->completion_status = $history->status;
+
+                // Get the name of the person who completed/denied/cancelled/evaluated it
+                if ($history->changed_by) {
+                    $user = DB::table('users')
+                        ->where('philrice_id', $history->changed_by)
+                        ->select('name')
+                        ->first();
+
+                    $serviceRequest->completed_by_name = $user ? $user->name : 'Unknown';
+                }
+            }
+
             if ($history->status === 'ongoing') {
                 $startTime = $history->created_at;
             } elseif ($startTime && in_array($history->status, ['paused', 'completed', 'cancelled'])) {

@@ -59,6 +59,29 @@
     <div x-data="{
         selectedStatus: 'ongoing',
         details: null,
+        statusHistory: [],
+        workingTime: '',
+        loadingHistory: false,
+        async loadRequestDetails(requestId) {
+            if (!requestId) return;
+            this.loadingHistory = true;
+            try {
+                const response = await fetch(`/ServiceTrackerGithub/ongoing/history/${requestId}`);
+                const result = await response.json();
+                if (result.status) {
+                    this.statusHistory = result.data.statusHistory || [];
+                    this.workingTime = result.data.workingTimeFormatted || '00:00:00';
+                    // Update additional details from the service request
+                    if (result.data.serviceRequest) {
+                        this.details.working_time = this.workingTime;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading request details:', error);
+            } finally {
+                this.loadingHistory = false;
+            }
+        },
         get paginatedData() {
             return this.data.filter(item => this.selectedStatus === 'ongoing' ? item.status === 'Ongoing' : item.status === 'Paused')
                 .slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage);
@@ -187,6 +210,7 @@
                                             <path fill-rule="evenodd"
                                                 d="M6.97 2.47a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06L8.25 4.81V16.5a.75.75 0 0 1-1.5 0V4.81L3.53 8.03a.75.75 0 0 1-1.06-1.06l4.5-4.5Zm9.53 4.28a.75.75 0 0 1 .75.75v11.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 1 1 1.06-1.06l3.22 3.22V7.5a.75.75 0 0 1 .75-.75Z"
                                                 clip-rule="evenodd" />
+                                                
                                         </svg></button>
                                 </th>
                                 <th class="py-2 pl-4 w-[15%]">Technician/s
@@ -218,7 +242,7 @@
                         <tbody id="ongoing-table-body" class="min-h-[400px]">
                             <template x-for="(item, index) in paginatedData" :key="index">
                                 <tr class="border-b border-gray-400 hover:bg-gray-100 cursor-pointer text-left align-middle"
-                                    @click="details = { ...item }">
+                                    @click="details = { ...item }; loadRequestDetails(item.request_id)">
                                     <td class="py-4" x-text="item.id"></td>
                                     <td class="py-4 pl-4" x-text="item.category"></td>
                                     <td class="py-4">
@@ -310,28 +334,49 @@
                                 <!-- STATUS HISTORY -->
                                 <div class="mt-3 flex-grow">
                                     <h3 class="text-lg font-bold text-black">Status History</h3>
-                                    <div class="mt-4 space-y-2">
-                                        <template
-                                            x-for="history in [
-                                { date: '02/14/2025', time: '10:00AM', status: 'Pending', technician: null },
-                                { date: '02/14/2025', time: '2:15PM', status: 'Picked', technician: 'Ranniel Lauriaga' }
-                            ]"
-                                            :key="history.date + history.time">
-                                            <div class="flex space-x-10">
+                                    <div class="mt-4 space-y-2 xl:h-[350px] overflow-y-auto pr-2">
+                                        <!-- Loading indicator -->
+                                        <div x-show="loadingHistory" class="flex justify-center items-center py-4">
+                                            <svg class="animate-spin h-5 w-5 text-green-600" xmlns="http://www.w3.org/2000/svg"
+                                                fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                                    stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                                </path>
+                                            </svg>
+                                        </div>
+
+                                        <!-- No history message -->
+                                        <div x-show="!loadingHistory && statusHistory.length === 0"
+                                            class="text-center text-gray-500 text-xs py-2">
+                                            No history available
+                                        </div>
+
+                                        <!-- History items -->
+                                        <template x-for="(history, index) in statusHistory" :key="index">
+                                            <div class="flex space-x-4 border-b border-gray-100 pb-2">
                                                 <!-- Left: Date & Time -->
-                                                <div class="text-xs text-gray-600">
-                                                    <p x-text="history.date"></p>
-                                                    <p x-text="history.time"></p>
+                                                <div class="text-xs text-gray-600 w-1/3">
+                                                    <p x-text="new Date(history.created_at).toLocaleDateString()"></p>
+                                                    <p x-text="new Date(history.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></p>
                                                 </div>
-                                                <!-- Right: Status & Technician -->
-                                                <div class="text-xs text-black">
-                                                    <p><strong>Status:</strong> <span x-text="history.status"></span>
-                                                    </p>
-                                                    <template x-if="history.technician">
-                                                        <p><strong>Technician:</strong> <span
-                                                                x-text="history.technician"></span>
-                                                        </p>
+                                                <!-- Right: Status, Technician, Problem, Action & Remarks -->
+                                                <div class="text-xs text-black w-2/3">
+                                                    <p><strong>Status:</strong> <span x-text="history.status"></span></p>
+                                                    <template x-if="history.status.toLowerCase() === 'pending'">
+                                                        <p><strong>Requester:</strong> <span x-text="details.requester"></span></p>
                                                     </template>
+                                                    <template x-if="history.status.toLowerCase() !== 'pending'">
+                                                        <p x-show="history.technician_name"><strong>Technician:</strong> <span x-text="history.technician_name"></span></p>
+                                                    </template>
+                                                    <p x-show="history.encountered_problem_name"><strong>Problem:</strong> <span x-text="history.encountered_problem_name"></span></p>
+                                                    <p x-show="history.action_name"><strong>Action:</strong> <span x-text="history.action_name"></span></p>
+                                                    <p x-show="history.remarks"><strong>Remarks:</strong> <span x-text="history.remarks"></span></p>
+                                                    <p x-show="history.documentation">
+                                                        <a :href="history.documentation" target="_blank"
+                                                            class="text-green-600 hover:underline">View Documentation</a>
+                                                    </p>
                                                 </div>
                                             </div>
                                         </template>
@@ -699,8 +744,7 @@
                                         class="absolute right-7 top-0 px-2 py-1 text-gray-500">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                             stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M6 18L18 6M6 6l12 12" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                                         </svg>
                                     </button>
                                 </div>
@@ -773,8 +817,7 @@
                                         class="absolute right-7 top-0 px-2 py-1 text-gray-500">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                             stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M6 18L18 6M6 6l12 12" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                                         </svg>
                                     </button>
                                 </div>

@@ -28,9 +28,8 @@ class PickedRequestController extends Controller
         $categories = Servicecategory::pluck('category_name', 'id');
 
         // Replace this line
-        $technicians = User::whereHas('role', function ($query) {
-            $query->whereIn('role_name', ['Super Administrator', 'Administrator', 'Technician', 'Station Technician']);
-        })->get();
+        // Replace the problematic line with direct user query
+        $technicians = Technician::has('libTechnician')->get();
 
         $stations = Station::all();
 
@@ -39,10 +38,18 @@ class PickedRequestController extends Controller
 
         // Start building the query
         $query = ServiceRequest::picked()
-            ->with(['category', 'ticket', 'stations', 'latestStatus.status'])
-            ->whereHas('primaryTechnician', function ($query) use ($currentUserPhilriceId) {
+            ->with(['category', 'ticket', 'stations', 'latestStatus.status']);
+
+        // Check if current user is an admin (role_id = 1)
+        $currentUser = auth()->user();
+        $isAdmin = $currentUser->role_id == 1;
+
+        // If not admin, only show requests assigned to current user
+        if (!$isAdmin) {
+            $query->whereHas('primaryTechnician', function ($query) use ($currentUserPhilriceId) {
                 $query->where('technician_emp_id', $currentUserPhilriceId);
-            }); // Only include requests assigned to current user as technician
+            });
+        }
 
         // Filter by date range if both are provided
         if ($request->filled('from_date') && $request->filled('to_date')) {
@@ -107,7 +114,7 @@ class PickedRequestController extends Controller
             // Update the service request status
             RequestStatus::where('request_id', $id)
                 ->update(['status_id' => 5]);
-                
+
             $user = auth()->user();
             if (!$user) {
                 return response()->json([
@@ -115,10 +122,10 @@ class PickedRequestController extends Controller
                     'message' => 'User not authenticated',
                 ], 401);
             }
-            
+
             // Get the user's actual ID (primary key) instead of philrice_id
             $userId = $user->id; // This is the actual ID that matches the foreign key constraint
-            
+
             if (!$userId) {
                 return response()->json([
                     'success' => false,

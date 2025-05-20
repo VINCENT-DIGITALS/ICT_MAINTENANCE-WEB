@@ -18,15 +18,15 @@ class CompletedRequestController extends Controller
         // Fetch categories using Eloquent
         $categories = Servicecategory::pluck('category_name', 'id');
 
-        // Fetch technicians
-        $technicians = User::whereHas('role', function ($query) {
-            $query->whereIn('role_name', ['Super Administrator', 'Administrator', 'Technician', 'Station Technician']);
-        })->get();
-
+        // Replace the problematic line with direct user query
+        $technicians = Technician::has('libTechnician')->get();
         // Fetch all stations
         $stations = Station::all();
         // Get current user's philrice_id
         $currentUserPhilriceId = auth()->user()->philrice_id;
+        // Check if current user is an admin (role_id = 1)
+        $isAdmin = auth()->user()->role_id == 1;
+        
         // Base query with eager loading
         $query = ServiceRequest::with([
             'category',
@@ -40,10 +40,14 @@ class CompletedRequestController extends Controller
         $query->whereHas('latestStatus.status', function ($q) {
             $q->whereIn('status_abbr', ['CPT', 'EVL', 'DND', 'CCL']);
         });
-        // Filter to only include requests assigned to current user as technician
-        $query->whereHas('primaryTechnician', function ($query) use ($currentUserPhilriceId) {
-            $query->where('technician_emp_id', $currentUserPhilriceId);
-        });
+        
+        // Only filter by technician if not an admin
+        if (!$isAdmin) {
+            $query->whereHas('primaryTechnician', function ($query) use ($currentUserPhilriceId) {
+                $query->where('technician_emp_id', $currentUserPhilriceId);
+            });
+        }
+        
         // Optional filters
         if ($request->filled('from_date') && $request->filled('to_date')) {
             $query->whereBetween('created_at', [
@@ -77,19 +81,6 @@ class CompletedRequestController extends Controller
         }
 
 
-        $requests = ServiceRequest::completed()
-            ->with([
-                'category',
-                'ticket',
-                'requester',
-                'statusHistory' => function ($query) {
-                    $query->with(['problemEncountered', 'actionTaken'])
-                        ->orderBy('created_at', 'desc');
-                }
-            ])
-            ->get();
-
-        // Get all requests matching those 4 statuses
         $requests = $query->get();
 
         // Process each request to ensure problem and action info is attached
@@ -190,7 +181,160 @@ class CompletedRequestController extends Controller
         ));
     }
 
+  public function fetchRequestWithHistoryAndWorkingTime($id)
+    {
+        $serviceRequest = ServiceRequest::with([
+            'category',
+            'ticket',
+            'stations',
+            'latestStatus.status',
+            'subCategory',
+            'requester',
+            'statusHistories' => function ($query) {
+                $query->orderBy('created_at');
+            }
+        ])->findOrFail($id);
 
+        // Get serial number and accountable for the service request
+        $serialInfo = DB::table('request_serialnumber')
+            ->where('request_id', $id)
+            ->select('serial_number', 'accountable')
+            ->first();
+
+        // Add serial number and accountable to the service request object
+        if ($serialInfo) {
+            $serviceRequest->serial_number = $serialInfo->serial_number;
+            $serviceRequest->accountable = $serialInfo->accountable;
+        } else {
+            $serviceRequest->serial_number = null;
+            $serviceRequest->accountable = null;
+        }
+
+        // Get primary technician assigned to this request
+        $primaryTechnician = DB::table('primarytechnician_request')
+            ->where('request_id', $id)
+            ->first();
+
+        // Add technician name from users table if primary technician exists
+        if ($primaryTechnician) {
+            $primaryTechnicianUser = DB::table('users')
+                ->where('philrice_id', $primaryTechnician->technician_emp_id)
+                ->select('name', 'philrice_id')
+                ->first();
+
+            $primaryTechnician->technician_name = $primaryTechnicianUser ? $primaryTechnicianUser->name : 'Unknown';
+        }
+
+        // Get secondary technicians assigned to this request
+        $secondaryTechnicians = DB::table('secondarytechnician_request')
+            ->where('request_id', $id)
+            ->get();
+
+        // Add technician names for each secondary technician
+        $secondaryTechnicians = $secondaryTechnicians->map(function ($tech) {
+            $technicianUser = DB::table('users')
+                ->where('philrice_id', $tech->technician_emp_id)
+                ->select('name', 'philrice_id')
+                ->first();
+
+            $tech->technician_name = $technicianUser ? $technicianUser->name : 'Unknown';
+            return $tech;
+        });
+
+        // Add technician information to the service request object
+        $serviceRequest->primary_technician = $primaryTechnician;
+        $serviceRequest->secondary_technicians = $secondaryTechnicians;
+
+        $histories = $serviceRequest->statusHistories;
+
+        // Define statuses to check for
+        $terminalStatuses = ['completed', 'Denied', 'cancelled', 'Evaluated'];
+
+        // ✅ Compute working time (only for 'ongoing' periods, stop when 'paused' or status changes)
+        $workingTime = 0;
+        $startTime = null;
+
+        foreach ($histories as $history) {
+            // Check for terminal statuses (completed, Denied, cancelled, Evaluated)
+            if (
+                in_array($history->status, $terminalStatuses) ||
+                in_array(strtolower($history->status), array_map('strtolower', $terminalStatuses))
+            ) {
+
+                $serviceRequest->completion_date = $history->created_at;
+                $serviceRequest->completed_by = $history->changed_by;
+                $serviceRequest->completion_status = $history->status;
+
+                // Get the name of the person who completed/denied/cancelled/evaluated it
+                if ($history->changed_by) {
+                    $user = DB::table('users')
+                        ->where('philrice_id', $history->changed_by)
+                        ->select('name')
+                        ->first();
+
+                    $serviceRequest->completed_by_name = $user ? $user->name : 'Unknown';
+                }
+            }
+
+            if ($history->status === 'ongoing') {
+                $startTime = $history->created_at;
+            } elseif ($startTime && in_array($history->status, ['paused', 'completed', 'cancelled'])) {
+                $workingTime += $history->created_at->diffInSeconds($startTime);
+                $startTime = null;
+            }
+            // Find the user who made this status change
+            if ($history->changed_by) {
+                $user = DB::table('users')
+                    ->where('philrice_id', $history->changed_by)
+                    ->select('name', 'philrice_id')
+                    ->first();
+
+                $history->technician_id = $history->changed_by;
+                $history->technician_name = $user ? $user->name : 'Unknown';
+            } else {
+                $history->technician_id = null;
+                $history->technician_name = null;
+            }
+            // Add action taken information
+            if ($history->action_id) {
+                $actionTaken = DB::table('lib_actions_taken')
+                    ->where('id', $history->action_id)
+                    ->select('id', 'action_name')
+                    ->first();
+
+                $history->action_name = $actionTaken ? $actionTaken->action_name : null;
+            } else {
+                $history->action_name = null;
+            }
+
+            // Add problem encountered information
+            if ($history->problem_id) {
+                $problemEncountered = DB::table('lib_problems_encountered')
+                    ->where('id', $history->problem_id)
+                    ->select('id', 'encountered_problem_name')
+                    ->first();
+
+                $history->encountered_problem_name = $problemEncountered ? $problemEncountered->encountered_problem_name : null;
+            } else {
+                $history->encountered_problem_name = null;
+            }
+        }
+
+        // If still ongoing now
+        if ($startTime) {
+            $workingTime += now()->diffInSeconds($startTime);
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'serviceRequest' => $serviceRequest,
+                'statusHistory' => $histories,
+                'workingTimeSeconds' => $workingTime,
+                'workingTimeFormatted' => gmdate('H:i:s', $workingTime),
+            ]
+        ]);
+    }
 
     public function sendMessageToClient(Request $request)
     {

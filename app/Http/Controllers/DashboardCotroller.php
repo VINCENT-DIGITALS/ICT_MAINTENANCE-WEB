@@ -30,6 +30,11 @@ class DashboardCotroller extends Controller
 
         $stations = Station::all();
 
+        // Get current user's philrice_id
+        $currentUserPhilriceId = auth()->user()->philrice_id;
+        // Check if current user is an admin (role_id = 1)
+        $isAdmin = auth()->user()->role_id == 1;
+
         // Base query for service requests
         $query = ServiceRequest::with(['category', 'ticket', 'stations', 'latestStatus.status']);
 
@@ -58,6 +63,10 @@ class DashboardCotroller extends Controller
             });
         }
 
+        // Filter by current user if not an admin
+        if (!$isAdmin) {
+            $query->where('requester_id', $currentUserPhilriceId);
+        }
 
         // Fetch filtered pending requests
         $pendingRequests = (clone $query)->pending()->get();

@@ -1026,7 +1026,7 @@
                             name: "{{ $technician['name'] }}",
                             philrice_id: "{{ $technician['philrice_id'] }}",
                             picked_count: {{ $technician['counts']['picked'] ?? 0 }},
-                            completed_count: {{ $technician['counts']['completed'] ?? 0 }},
+                            completed_count: {{ $technician['counts']['other_completed'] ?? 0 }},
                             completion_rate: "{{ $technician['completion_rate'] ?? '0%' }}",
                             turnaround_time: "{{ $technician['turnaround_time'] ?? '0 days 0 hrs 0 min 0 sec' }}",
                             rating: "{{ $technician['rating']['display'] ?? 'Not rated' }}"

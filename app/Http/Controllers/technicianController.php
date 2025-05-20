@@ -40,14 +40,14 @@ class technicianController extends Controller
                 $paused = ServiceRequest::paused()->where('requester_id', $user->philrice_id)->count();
                 $completed = ServiceRequest::completed()->where('requester_id', $user->philrice_id)->count();
                 $evaluated = ServiceRequest::evaluated()->where('requester_id', $user->philrice_id)->count();
-                $otherCompleted = $completed - $evaluated; // Non-evaluated completed requests
+                $otherCompleted = $completed + $evaluated; // Non-evaluated completed requests
 
                 // Calculate completion rate percentage, ensuring it doesn't exceed 100%
                 if ($picked === 0) {
                     $completionRate = 0; // Avoid division by zero
                 } else {
                     // Make sure the ratio doesn't exceed 1 (100%)
-                    $ratio = min(1, $completed / $picked);
+                    $ratio = min(1, $otherCompleted / $picked);
                     $completionRate = round($ratio * 100);
                 }
 

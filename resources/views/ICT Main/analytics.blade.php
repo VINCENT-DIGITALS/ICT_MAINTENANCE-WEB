@@ -39,27 +39,30 @@
             </div>
 
             <!-- All SERVICE CATEGORY Dropdown -->
-            <select
-                class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500">
-                <option>ALL SERVICE CATEGORY</option>
+            <select id="category-filter" 
+                class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500"
+                onchange="refreshAnalyticsData()">
+                <option value="">ALL SERVICE CATEGORY</option>
                 @foreach ($categories as $id => $category)
                     <option value="{{ $id }}">{{ $category }}</option>
                 @endforeach
             </select>
 
             <!-- PHILRICE CES Dropdown -->
-            <select
-                class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500">
-                <option>PHILRICE CES</option>
+            <select id="location-filter"
+                class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500"
+                onchange="refreshAnalyticsData()">
+                <option value="PHILRICE CES">PHILRICE CES</option>
             </select>
 
             <!-- ALL TECHNICIANS Dropdown -->
             @if (Auth::check() &&
                     Auth::user()->role_id == DB::table('lib_roles')->where('role_name', 'Super Administrator')->value('id'))
                 <!-- ALL TECHNICIANS Dropdown (Visible Only for Super Admin) -->
-                <select
-                    class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500">
-                    <option>ALL TECHNICIANS</option>
+                <select id="technician-filter"
+                    class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500"
+                    onchange="refreshAnalyticsData()">
+                    <option value="">ALL TECHNICIANS</option>
                     @foreach ($technicians as $technician)
                         <option value="{{ $technician->philrice_id }}">{{ $technician->name }}</option>
                     @endforeach
