@@ -115,6 +115,15 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/analytics/requests-by-office', [AnalyticsController::class, 'getRequestsByOffice'])
         ->name('analytics.requests-by-office');
 
+    // Add this route with your other analytics routes
+    Route::get('/analytics/turnaround-times-by-category', [App\Http\Controllers\AnalyticsController::class, 'getTurnaroundTimesByCategory']);
+
+    // Add these routes to your existing routes
+    Route::get('/analytics/turnaround-times-by-category', [App\Http\Controllers\AnalyticsController::class, 'getTurnaroundTimesByCategory']);
+    Route::get('/analytics/turnaround-time/{technicianId}', [App\Http\Controllers\AnalyticsController::class, 'getTurnaroundTime']);
+    Route::get('/analytics/turnaround-time-by-category/{technicianId}', [App\Http\Controllers\AnalyticsController::class, 'getTurnaroundTimeByCategory']);
+    Route::get('/analytics/average-turnaround-time', [App\Http\Controllers\AnalyticsController::class, 'getAverageTurnaroundTime']);
+
     // Incident reports
     Route::post('/incident-reports/store', [IncidentReportController::class, 'store'])->name('incident_reports.store');
     Route::put('/incident-reports/update/{id}', [IncidentReportController::class, 'update'])->name('incident_reports.update');
@@ -182,3 +191,10 @@ Route::get('/requests', function () {
 
 // Add this if it doesn't exist
 Route::get('/requests', [ServiceRequestController::class, 'getFirstTicketForTechnicians'])->name('requests');
+
+// Analytics routes
+Route::get('/analytics/requests-by-office', [App\Http\Controllers\AnalyticsController::class, 'getRequestsByOffice']);
+Route::get('/analytics/turnaround-times-by-category', [App\Http\Controllers\AnalyticsController::class, 'getTurnaroundTimesByCategory']);
+Route::get('/analytics/turnaround-time/{technicianId}', [App\Http\Controllers\AnalyticsController::class, 'getTurnaroundTime']);
+Route::get('/analytics/turnaround-time-by-category/{technicianId}', [App\Http\Controllers\AnalyticsController::class, 'getTurnaroundTimeByCategory']);
+Route::get('/analytics/average-turnaround-time', [App\Http\Controllers\AnalyticsController::class, 'getAverageTurnaroundTime']);
