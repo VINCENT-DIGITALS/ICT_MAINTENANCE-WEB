@@ -39,14 +39,8 @@
             </div>
 
             <!-- All SERVICE CATEGORY Dropdown -->
-<<<<<<< HEAD
-            <select id="category-filter" 
-                class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500"
-                onchange="refreshAnalyticsData()">
-=======
             <select id="category-filter"
                 class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500">
->>>>>>> 9d16875405fbc5c02cca15a41ae8ccb7402725ba
                 <option value="">ALL SERVICE CATEGORY</option>
                 @foreach ($categories as $id => $category)
                     <option value="{{ $id }}">{{ $category }}</option>
@@ -65,12 +59,7 @@
                     Auth::user()->role_id == DB::table('lib_roles')->where('role_name', 'Super Administrator')->value('id'))
                 <!-- ALL TECHNICIANS Dropdown (Visible Only for Super Admin) -->
                 <select id="technician-filter"
-<<<<<<< HEAD
-                    class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500"
-                    onchange="refreshAnalyticsData()">
-=======
                     class="border border-gray-300 text-gray-700 text-xs px-3 h-[30px] rounded-md focus:ring focus:ring-green-500">
->>>>>>> 9d16875405fbc5c02cca15a41ae8ccb7402725ba
                     <option value="">ALL TECHNICIANS</option>
                     @foreach ($technicians as $technician)
                         <option value="{{ $technician->philrice_id }}">{{ $technician->name }}</option>
