@@ -334,7 +334,7 @@
                                 <!-- STATUS HISTORY -->
                                 <div class="mt-3 flex-grow">
                                     <h3 class="text-lg font-bold text-black">Status History</h3>
-                                    <div class="mt-4 space-y-2 xl:h-[350px] overflow-y-auto pr-2">
+                                    <div class="mt-4 space-y-2 xl:h-[380px] overflow-y-auto pr-2">
                                         <!-- Loading indicator -->
                                         <div x-show="loadingHistory" class="flex justify-center items-center py-4">
                                             <svg class="animate-spin h-5 w-5 text-green-600" xmlns="http://www.w3.org/2000/svg"

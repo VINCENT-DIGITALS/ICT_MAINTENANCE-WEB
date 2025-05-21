@@ -24,9 +24,8 @@ class DashboardCotroller extends Controller
         $categories = Servicecategory::pluck('category_name', 'id');
 
         // Replace this line
-        $technicians = User::whereHas('role', function ($query) {
-            $query->whereIn('role_name', ['Super Administrator', 'Administrator', 'Technician', 'Station Technician']);
-        })->get();
+        // Replace the problematic line with direct user query
+        $technicians = Technician::has('libTechnician')->get();
 
         $stations = Station::all();
 
@@ -64,23 +63,38 @@ class DashboardCotroller extends Controller
         }
 
         // Filter by current user if not an admin
+
+        // Filter by current user if not an admin
         if (!$isAdmin) {
-            $query->where('requester_id', $currentUserPhilriceId);
+            // For all request types except pending, filter by primary technician
+            $nonPendingQuery = clone $query;
+            $nonPendingQuery->whereHas('primaryTechnician', function ($query) use ($currentUserPhilriceId) {
+                $query->where('technician_emp_id', $currentUserPhilriceId);
+            });
+
+            // Create a separate pending query without the technician filter
+            $pendingQuery = clone $query;
+
+            // Fetch pending requests without the technician filter
+            $pendingRequests = $pendingQuery->pending()->get();
+            $pendingRequestsCount = $pendingRequests->count();
+
+            // Use the filtered query for all other request types
+            $query = $nonPendingQuery;
+        } else {
+            // For admin users, just get all pending requests
+            $pendingRequests = (clone $query)->pending()->get();
+            $pendingRequestsCount = $pendingRequests->count();
         }
 
-        // Fetch filtered pending requests
-        $pendingRequests = (clone $query)->pending()->get();
-        $pendingRequestsCount = $pendingRequests->count();
-
-        // Fetch filtered completed requests
+        // For non-pending statuses, use the filtered query
+        // Note: Don't fetch pending requests again since we already did above
         $completedRequests = (clone $query)->completed()->get();
         $completedRequestsCount = $completedRequests->count();
 
-        // Fetch filtered picked requests
         $pickedRequests = (clone $query)->picked()->get();
         $pickedRequestsCount = $pickedRequests->count();
 
-        // Fetch filtered ongoing requests
         $ongoingRequests = (clone $query)->ongoing()->get();
         $ongoingRequestsCount = $ongoingRequests->count();
 
@@ -213,7 +227,7 @@ class DashboardCotroller extends Controller
         // Check pending requests limit
         $pendingStatusId = DB::table('lib_status')->where('status_name', 'Pending')->value('id');
         $pendingCount = ServiceRequest::where('requester_id', $userId)
-            ->whereHas('requestStatus', function($query) use ($pendingStatusId) {
+            ->whereHas('requestStatus', function ($query) use ($pendingStatusId) {
                 $query->where('status_id', $pendingStatusId);
             })
             ->count();
@@ -275,7 +289,7 @@ class DashboardCotroller extends Controller
         // Do the same checks as in checkRequestLimit to be consistent
         $pendingStatusId = DB::table('lib_status')->where('status_name', 'Pending')->value('id');
         $pendingCount = ServiceRequest::where('requester_id', $userId)
-            ->whereHas('requestStatus', function($query) use ($pendingStatusId) {
+            ->whereHas('requestStatus', function ($query) use ($pendingStatusId) {
                 $query->where('status_id', $pendingStatusId);
             })
             ->count();

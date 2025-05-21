@@ -26,7 +26,7 @@ class CompletedRequestController extends Controller
         $currentUserPhilriceId = auth()->user()->philrice_id;
         // Check if current user is an admin (role_id = 1)
         $isAdmin = auth()->user()->role_id == 1;
-        
+
         // Base query with eager loading
         $query = ServiceRequest::with([
             'category',
@@ -40,14 +40,14 @@ class CompletedRequestController extends Controller
         $query->whereHas('latestStatus.status', function ($q) {
             $q->whereIn('status_abbr', ['CPT', 'EVL', 'DND', 'CCL']);
         });
-        
+
         // Only filter by technician if not an admin
         if (!$isAdmin) {
             $query->whereHas('primaryTechnician', function ($query) use ($currentUserPhilriceId) {
                 $query->where('technician_emp_id', $currentUserPhilriceId);
             });
         }
-        
+
         // Optional filters
         if ($request->filled('from_date') && $request->filled('to_date')) {
             $query->whereBetween('created_at', [
@@ -57,7 +57,9 @@ class CompletedRequestController extends Controller
         }
 
         if ($request->filled('technician_id')) {
-            $query->where('requester_id', $request->technician_id);
+            $query->whereHas('primaryTechnician', function ($query) use ($request) {
+                $query->where('technician_emp_id', $request->technician_id);
+            });
         }
 
         if ($request->filled('station_id')) {
@@ -181,7 +183,7 @@ class CompletedRequestController extends Controller
         ));
     }
 
-  public function fetchRequestWithHistoryAndWorkingTime($id)
+    public function fetchRequestWithHistoryAndWorkingTime($id)
     {
         $serviceRequest = ServiceRequest::with([
             'category',

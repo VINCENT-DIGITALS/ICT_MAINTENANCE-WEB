@@ -1,4 +1,5 @@
 <x-layout>
+
     <head>
         <!-- ...existing head content... -->
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -213,15 +214,19 @@
 
                             <div class="mt-3 ">
                                 <p class="text-[12px] text-gray-400">Service Category:</p>
-                                <div class="border border-gray-300 text-gray-700 text-xs px-3 py-1.5 h-[30px] w-full rounded-md focus:ring focus:ring-green-500 flex items-center">
-                                    <span x-text="details.category ? details.category : 'No Category available'"></span>
+                                <div
+                                    class="border border-gray-300 text-gray-700 text-xs px-3 py-1.5 h-[30px] w-full rounded-md focus:ring focus:ring-green-500 flex items-center">
+                                    <span
+                                        x-text="details.category ? details.category : 'No Category available'"></span>
                                 </div>
                             </div>
 
                             <div class="mt-3 ">
                                 <p class="text-[12px] text-gray-400">Subcategory: </p>
-                                <div class="border border-gray-300 text-gray-700 text-xs px-3 py-1.5 h-[30px] w-full rounded-md focus:ring focus:ring-green-500 flex items-center">
-                                    <span x-text="details.subcategory ? details.subcategory : 'No subcategory available'"></span>
+                                <div
+                                    class="border border-gray-300 text-gray-700 text-xs px-3 py-1.5 h-[30px] w-full rounded-md focus:ring focus:ring-green-500 flex items-center">
+                                    <span
+                                        x-text="details.subcategory ? details.subcategory : 'No subcategory available'"></span>
                                 </div>
                             </div>
 
@@ -243,8 +248,8 @@
                                         class="w-12 h-12 rounded-full bg-gray-400">
                                     <div>
                                         <p class="text-xs font-semibold text-gray-600">Actual Client:</p>
-                                        <p class="text-xs font-medium text-gray-900"
-                                            x-text="details.actual_client"></p>
+                                        <p class="text-xs font-medium text-gray-900" x-text="details.actual_client">
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -296,20 +301,19 @@
 
                         <!-- EQUIPMENT DETAILS -->
                         <div class="mt-4 text-gray-700">
-                            <p class="text-xs text-[#707070]">Serial Number: ################</p>
-                            <p class="text-xs text-[#707070]">Accountable: Luis Alejandre Tamani</p>
-                            <p class="text-xs text-[#707070]">Division: Information Systems Division</p>
-                            <p class="text-xs text-[#707070]">Date Acquired: January 5, 2019</p>
+                            <p class="text-xs text-[#707070]">Serial Number: <span
+                                    x-text="details.serial_number"></span></p>
+                            <p class="text-xs text-[#707070]">Accountable: <span x-text="details.accountable"></span>
+                            </p>
+                            <p class="text-xs text-[#707070]">Division: <span x-text="details.division"></span></p>
+                            <p class="text-xs text-[#707070]">Date Acquired: <span
+                                    x-text="details.date_acquired"></span></p>
                         </div>
 
                         <!-- ITEM DESCRIPTION -->
                         <div class="mt-4">
                             <p class="text-xs text-[#707070]">Item Description:</p>
-                            <p class="text-xs text-black leading-tight">
-                                Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed diam nonummy euismod tempor
-                                incididunt ut labore et dolore magna aliquam erat, sed diam voluptua. At vero eos et
-                                accusam et...
-                            </p>
+                            <p class="text-xs text-black leading-tight" x-text="details.description"></p>
                         </div>
 
                         <!-- SERVICE HISTORY -->
@@ -391,7 +395,11 @@
                             date_requested: '{{ \Carbon\Carbon::parse($pendingRequest->created_at)->format('Y-m-d') }}',
                             time_requested: '{{ \Carbon\Carbon::parse($pendingRequest->created_at)->format('h:i A') }}',
                             date_completion: '{{ $pendingRequest->request_completion ? \Carbon\Carbon::parse($pendingRequest->request_completion)->format('Y-m-d') : 'Not specified' }}',
-                            contact: '{{ $pendingRequest->local_no ?? 'Not provided' }}'
+                            contact: '{{ $pendingRequest->local_no ?? 'Not provided' }}',
+                            serial_number: '{{ $pendingRequest->serial_number ?? 'Not available' }}',
+                            accountable: '{{ $pendingRequest->accountable ?? 'Not specified' }}',
+                            division: '{{ $pendingRequest->division ?? 'Not specified' }}',
+                            date_acquired: '{{ $pendingRequest->created_at ?? 'Not available' }}'
                         },
                     @endforeach
                 ],

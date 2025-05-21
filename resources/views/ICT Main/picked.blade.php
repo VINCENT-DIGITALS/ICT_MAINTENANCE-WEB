@@ -334,20 +334,19 @@
 
                         <!-- EQUIPMENT DETAILS -->
                         <div class="mt-4 text-gray-700">
-                            <p class="text-xs text-[#707070]">Serial Number: ################</p>
-                            <p class="text-xs text-[#707070]">Accountable: Luis Alejandre Tamani</p>
-                            <p class="text-xs text-[#707070]">Division: Information Systems Division</p>
-                            <p class="text-xs text-[#707070]">Date Acquired: January 5, 2019</p>
+                            <p class="text-xs text-[#707070]">Serial Number: <span
+                                    x-text="details.serial_number"></span></p>
+                            <p class="text-xs text-[#707070]">Accountable: <span x-text="details.accountable"></span>
+                            </p>
+                            <p class="text-xs text-[#707070]">Division: <span x-text="details.division"></span></p>
+                            <p class="text-xs text-[#707070]">Date Acquired: <span
+                                    x-text="details.date_acquired"></span></p>
                         </div>
 
                         <!-- ITEM DESCRIPTION -->
                         <div class="mt-4">
                             <p class="text-xs text-[#707070]">Item Description:</p>
-                            <p class="text-xs text-black leading-tight">
-                                Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed diam nonummy euismod tempor
-                                incididunt ut labore et dolore magna aliquam erat, sed diam voluptua. At vero eos et
-                                accusam et...
-                            </p>
+                            <p class="text-xs text-black leading-tight" x-text="details.description"></p>
                         </div>
 
                         <!-- SERVICE HISTORY -->
@@ -480,7 +479,13 @@
                             contact: '{{ $pickedRequest->local_no }}',
                             requester: '{{ optional(\App\Models\User::where('philrice_id', $pickedRequest->requester_id)->first())->name ?? $pickedRequest->requester_id }}',
 
-                            actual_client: 'N/A'
+                            actual_client: 'N/A',
+
+                            // Add the equipment info fields
+                            serial_number: '{{ $pickedRequest->serial_number ?? 'Not available' }}',
+                            accountable: '{{ $pickedRequest->accountable ?? 'Not specified' }}',
+                            division: '{{ $pickedRequest->division ?? 'Not specified' }}',
+                            created_at: '{{ $pickedRequest->created_at ?? 'Not available' }}'
                         }
                         @if (!$loop->last)
                             ,

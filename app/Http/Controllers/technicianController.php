@@ -35,11 +35,25 @@ class technicianController extends Controller
             ->get()
             ->map(function ($user) {
                 // Get count of requests by status for this user
-                $picked = ServiceRequest::picked()->where('requester_id', $user->philrice_id)->count();
-                $ongoing = ServiceRequest::ongoing()->where('requester_id', $user->philrice_id)->count();
-                $paused = ServiceRequest::paused()->where('requester_id', $user->philrice_id)->count();
-                $completed = ServiceRequest::completed()->where('requester_id', $user->philrice_id)->count();
-                $evaluated = ServiceRequest::evaluated()->where('requester_id', $user->philrice_id)->count();
+                $picked = ServiceRequest::picked()->whereHas('primaryTechnician', function ($query) use ($user) {
+                    $query->where('technician_emp_id', $user->philrice_id);
+                })->count();
+
+                $ongoing = ServiceRequest::ongoing()->whereHas('primaryTechnician', function ($query) use ($user) {
+                    $query->where('technician_emp_id', $user->philrice_id);
+                })->count();
+
+                $paused = ServiceRequest::paused()->whereHas('primaryTechnician', function ($query) use ($user) {
+                    $query->where('technician_emp_id', $user->philrice_id);
+                })->count();
+
+                $completed = ServiceRequest::completed()->whereHas('primaryTechnician', function ($query) use ($user) {
+                    $query->where('technician_emp_id', $user->philrice_id);
+                })->count();
+
+                $evaluated = ServiceRequest::evaluated()->whereHas('primaryTechnician', function ($query) use ($user) {
+                    $query->where('technician_emp_id', $user->philrice_id);
+                })->count();
                 $otherCompleted = $completed + $evaluated; // Non-evaluated completed requests
 
                 // Calculate completion rate percentage, ensuring it doesn't exceed 100%
@@ -609,7 +623,6 @@ class technicianController extends Controller
                 'total_seconds' => $totalActiveSeconds,
                 'debug_info' => $results
             ];
-
         } catch (\Exception $e) {
             return [
                 'success' => false,

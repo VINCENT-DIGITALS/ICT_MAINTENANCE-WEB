@@ -89,6 +89,30 @@ class PickedRequestController extends Controller
         // Get the results
         $pickedRequests = $query->get();
 
+        // Enhance each request with serial number and accountable information
+        $pickedRequests->map(function ($pickedRequest) {
+            // Get serial number and accountable for the service request
+            $serialInfo = DB::table('request_serialnumber')
+                ->where('request_id', $pickedRequest->id)
+                ->select('serial_number', 'accountable', 'division', 'created_at as date_acquired')
+                ->first();
+
+            // Add serial number and accountable to the service request object
+            if ($serialInfo) {
+                $pickedRequest->serial_number = $serialInfo->serial_number;
+                $pickedRequest->accountable = $serialInfo->accountable;
+                $pickedRequest->division = $serialInfo->division;
+                $pickedRequest->date_acquired = $serialInfo->date_acquired;
+            } else {
+                $pickedRequest->serial_number = 'Not available';
+                $pickedRequest->accountable = 'Not specified';
+                $pickedRequest->division = 'Not specified';
+                $pickedRequest->date_acquired = 'Not available';
+            }
+
+            return $pickedRequest;
+        });
+
         $pickedRequests = $pickedRequests->sortBy(function ($item) {
             $ticketNumber = 0;
 

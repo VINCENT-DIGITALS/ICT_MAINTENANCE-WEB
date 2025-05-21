@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-
+use App\Models\Technician;
 class CustomerFeedbackController extends Controller
 {
     /**
@@ -14,15 +14,11 @@ class CustomerFeedbackController extends Controller
     public function index(Request $request)
     {
         // Get all technicians
-        $technicians = User::whereIn('role_id', function($query) {
-                $query->select('id')
-                      ->from('lib_roles')
-                      ->whereIn('role_name', ['Technician', 'Station Technician', 'Super Administrator', 'Administrator']);
-            })
-            ->where('archived', false)
-            ->select('name', 'philrice_id')
-            ->orderBy('name')
-            ->get();
+       $technicians = Technician::has('libTechnician')
+    ->where('archived', false)
+    ->select('name', 'philrice_id')
+    ->orderBy('name')
+    ->get();
 
         // Get all categories
         $categories = DB::table('lib_categories')

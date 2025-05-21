@@ -3,6 +3,9 @@
     <!-- Add Flatpickr CSS and JS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+   <!-- Add PDF export libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <div class="flex flex-col sm:flex-row w-full justify-between font-roboto-text">
         <div class="flex items-center mb-3 sm:mb-0">
@@ -752,6 +755,43 @@
                     Chart.defaults.font.size = 12;
                 }
             }
+                    
+            // PDF download functionality for all download buttons
+            document.querySelectorAll('.flex button svg[viewBox="0 0 14 19"]').forEach(button => {
+                const parentButton = button.closest('button');
+                if (parentButton) {
+                    parentButton.addEventListener('click', function() {
+                        // Find the container to capture (parent card of the button)
+                        const container = this.closest('.bg-white');
+                        if (!container) return;
+                        
+                        // Get chart title or container data to use in filename
+                        let filename = 'analytics_chart';
+                        const titleElement = container.querySelector('h2, h3');
+                        if (titleElement) {
+                            filename = titleElement.textContent.trim().toLowerCase().replace(/\s+/g, '_');
+                        }
+                        
+                        // Determine orientation based on container dimensions
+                        const isWide = container.offsetWidth > container.offsetHeight;
+                        const orientation = isWide ? 'landscape' : 'portrait';
+                        
+                        html2canvas(container).then(canvas => {
+                            const imgData = canvas.toDataURL('image/png');
+                            const pdf = new jspdf.jsPDF({
+                                orientation: orientation,
+                                unit: 'mm'
+                            });
+                            
+                            const imgWidth = orientation === 'landscape' ? 250 : 170;
+                            const imgHeight = canvas.height * imgWidth / canvas.width;
+                            
+                            pdf.addImage(imgData, 'PNG', 20, 20, imgWidth, imgHeight);
+                            pdf.save(`${filename}.pdf`);
+                        });
+                    });
+                }
+            });
 
             // Call on load and resize
             adjustForScreenSize();

@@ -67,6 +67,35 @@ class PendingRequestController extends Controller
         }
         // Get the results
         $pendingRequests = $query->get();
+
+        // Enhance each request with serial number and accountable information
+        $pendingRequests->map(function ($pendingRequest) {
+            // Get serial number and accountable for the service request
+            $serialInfo = DB::table('request_serialnumber')
+                ->where('request_id', $pendingRequest->id)
+                ->select('serial_number', 'accountable', 'division', 'created_at')
+                ->first();
+
+            // And then also change:
+            if ($serialInfo) {
+                $pendingRequest->serial_number = $serialInfo->serial_number;
+                $pendingRequest->accountable = $serialInfo->accountable;
+                $pendingRequest->division = $serialInfo->division;
+                $pendingRequest->created_at = $serialInfo->created_at;
+            }
+
+            // To this:
+            if ($serialInfo) {
+                $pendingRequest->serial_number = $serialInfo->serial_number;
+                $pendingRequest->accountable = $serialInfo->accountable;
+                $pendingRequest->division = $serialInfo->division;
+                $pendingRequest->created_at = $serialInfo->created_at;
+            }
+
+            return $pendingRequest;
+        });
+
+
         // Custom sort: priority = 1 on top, then by numeric part of ticket_full ASC
         $pendingRequests = $pendingRequests->sortBy(function ($item) {
             $ticketNumber = 0;
